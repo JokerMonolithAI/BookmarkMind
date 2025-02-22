@@ -3,8 +3,16 @@
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import { Suspense } from 'react'
+import { BookmarkStats } from '@/components/dashboard/BookmarkStats'
+import { BookmarkList } from '@/components/dashboard/BookmarkList'
+import { MindMap } from '@/components/dashboard/MindMap'
+import { ImportButton } from '@/components/dashboard/ImportButton'
+import { ViewToggle } from '@/components/dashboard/ViewToggle'
+import { SearchBar } from '@/components/dashboard/SearchBar'
+import { Loading } from '@/components/ui/loading'
 
-export default function DashboardPage() {
+export default function Dashboard() {
   const { user, loading } = useAuth();
   const router = useRouter();
 
@@ -19,12 +27,33 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900">Welcome to BookmarkMind</h1>
-        <p className="mt-2 text-gray-600">Hello, {user?.email}</p>
-        {/* 后续添加书签管理功能 */}
-      </div>
+    <div className="min-h-screen bg-gray-50">
+      {/* Top Navigation Bar */}
+      <nav className="border-b bg-white p-4">
+        <div className="mx-auto flex max-w-7xl items-center justify-between">
+          <div className="flex items-center gap-4">
+            <ImportButton />
+            <SearchBar />
+          </div>
+          <ViewToggle />
+        </div>
+      </nav>
+
+      {/* Main Content */}
+      <main className="mx-auto max-w-7xl p-6">
+        {/* Stats Overview */}
+        <Suspense fallback={<Loading />}>
+          <BookmarkStats />
+        </Suspense>
+
+        {/* Content View (List/Mind Map) */}
+        <div className="mt-6">
+          <Suspense fallback={<Loading />}>
+            <BookmarkList />
+            <MindMap />
+          </Suspense>
+        </div>
+      </main>
     </div>
   );
 } 
