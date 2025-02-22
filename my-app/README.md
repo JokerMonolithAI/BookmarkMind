@@ -55,8 +55,9 @@ cd my-app
 2. 安装依赖
 ```bash
 npm install
+npm install firebase
+npm install firebase-auth       
 ```
-
 3. 配置环境变量
 复制 `.env.local.example` 文件为 `.env.local`，并填入你的 Firebase 配置信息：
 ```
