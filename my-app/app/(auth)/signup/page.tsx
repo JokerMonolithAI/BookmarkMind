@@ -48,42 +48,42 @@ export default function SignupPage() {
 
           <div className="space-y-4">
             <div>
-              <label htmlFor="name" className="text-sm font-medium text-gray-700">
+              <label htmlFor="name" className="text-sm font-medium text-gray-900">
                 Full name
               </label>
               <input
                 id="name"
                 type="text"
                 required
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
             </div>
 
             <div>
-              <label htmlFor="email" className="text-sm font-medium text-gray-700">
+              <label htmlFor="email" className="text-sm font-medium text-gray-900">
                 Email address
               </label>
               <input
                 id="email"
                 type="email"
                 required
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="text-sm font-medium text-gray-700">
+              <label htmlFor="password" className="text-sm font-medium text-gray-900">
                 Password
               </label>
               <input
                 id="password"
                 type="password"
                 required
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
