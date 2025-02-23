@@ -59,6 +59,10 @@ npm install firebase
 npm install firebase-auth
 npm install lucide-react @radix-ui/react-slot class-variance-authority clsx tailwind-merge
 npm install next-themes
+npm install -D @shadcn/ui
+npm install @radix-ui/react-dialog @radix-ui/react-select lucide-react
+npm install clsx tailwind-merge
+npm install @radix-ui/react-checkbox
 ```
 3. 配置环境变量
 复制 `.env.local.example` 文件为 `.env.local`，并填入你的 Firebase 配置信息：
