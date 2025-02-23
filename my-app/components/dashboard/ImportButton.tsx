@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { PlusIcon, Upload, FileIcon, ChevronLeft } from 'lucide-react'
 import { parseBookmarkFile } from '@/lib/utils/bookmarkParser'
@@ -22,12 +22,17 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from 'sonner'
 
+// 添加一个生成唯一ID的函数
+const generateUniqueId = () => {
+  return Math.random().toString(36).substring(2) + Date.now().toString(36);
+}
+
 export function ImportButton() {
   const [isLoading, setIsLoading] = useState(false)
   const [browserType, setBrowserType] = useState<BrowserType>('chrome')
   const [fileName, setFileName] = useState<string>('')
-  const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
-  const [selectedBookmarks, setSelectedBookmarks] = useState<Set<string>>(new Set())
+  const [bookmarks, setBookmarks] = useState<(Bookmark & { id: string })[]>([])
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [step, setStep] = useState<'upload' | 'select'>('upload')
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -38,9 +43,13 @@ export function ImportButton() {
       
       setFileName(file.name)
       const parsedBookmarks = await parseBookmarkFile(file, browserType)
-      setBookmarks(parsedBookmarks)
-      // 默认全选
-      setSelectedBookmarks(new Set(parsedBookmarks.map(b => b.url)))
+      const bookmarksWithIds = parsedBookmarks.map(bookmark => ({
+        ...bookmark,
+        id: generateUniqueId()
+      }))
+
+      setBookmarks(bookmarksWithIds)
+      setSelectedIds(bookmarksWithIds.map(b => b.id))
       setStep('select')
       
     } catch (error) {
@@ -54,7 +63,7 @@ export function ImportButton() {
   const handleImport = async () => {
     try {
       setIsLoading(true)
-      const selectedBookmarksList = bookmarks.filter(b => selectedBookmarks.has(b.url))
+      const selectedBookmarksList = bookmarks.filter(b => selectedIds.includes(b.id))
       
       const response = await fetch('/api/bookmarks/import', {
         method: 'POST',
@@ -67,11 +76,10 @@ export function ImportButton() {
       if (!response.ok) throw new Error('Failed to import bookmarks')
 
       toast.success(`成功导入 ${selectedBookmarksList.length} 个书签`)
-      // 重置状态
       setStep('upload')
       setFileName('')
       setBookmarks([])
-      setSelectedBookmarks(new Set())
+      setSelectedIds([])
       
     } catch (error) {
       console.error('Import error:', error)
@@ -81,21 +89,21 @@ export function ImportButton() {
     }
   }
 
-  const toggleBookmark = (url: string) => {
-    const newSelected = new Set(selectedBookmarks)
-    if (newSelected.has(url)) {
-      newSelected.delete(url)
-    } else {
-      newSelected.add(url)
-    }
-    setSelectedBookmarks(newSelected)
+  const toggleBookmark = (id: string) => {
+    setSelectedIds(prev => {
+      if (prev.includes(id)) {
+        return prev.filter(i => i !== id)
+      } else {
+        return [...prev, id]
+      }
+    })
   }
 
   const toggleAll = () => {
-    if (selectedBookmarks.size === bookmarks.length) {
-      setSelectedBookmarks(new Set())
+    if (selectedIds.length === bookmarks.length) {
+      setSelectedIds([])
     } else {
-      setSelectedBookmarks(new Set(bookmarks.map(b => b.url)))
+      setSelectedIds(bookmarks.map(b => b.id))
     }
   }
 
@@ -200,41 +208,38 @@ export function ImportButton() {
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="selectAll"
-                  checked={selectedBookmarks.size === bookmarks.length}
+                  checked={selectedIds.length === bookmarks.length && bookmarks.length > 0}
                   onClick={toggleAll}
                 />
                 <label
                   htmlFor="selectAll"
-                  className="text-sm font-medium leading-none"
+                  className="text-sm font-medium leading-none hover:cursor-pointer select-none"
                 >
                   全选
                 </label>
               </div>
               <span className="text-sm text-muted-foreground">
-                已选择 {selectedBookmarks.size} / {bookmarks.length} 个书签
+                已选择 {selectedIds.length} / {bookmarks.length} 个书签
               </span>
             </div>
             
             <div className="flex-1 overflow-y-auto min-h-0">
               <div className="space-y-2 px-1">
-                {bookmarks.map((bookmark, index) => (
+                {bookmarks.map((bookmark) => (
                   <div
-                    key={`${bookmark.url}-${bookmark.addedAt?.getTime() || index}`}
-                    className="flex items-start space-x-3 p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-900"
+                    key={bookmark.id}
+                    className="flex items-start space-x-3 p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-900 cursor-pointer"
+                    onClick={() => toggleBookmark(bookmark.id)}
                   >
                     <Checkbox
-                      id={`bookmark-${index}`}
-                      checked={selectedBookmarks.has(bookmark.url)}
-                      onClick={() => toggleBookmark(bookmark.url)}
+                      id={bookmark.id}
+                      checked={selectedIds.includes(bookmark.id)}
                     />
-                    <div className="flex-1 min-w-0">
-                      <label
-                        htmlFor={`bookmark-${index}`}
-                        className="text-sm font-medium leading-none hover:cursor-pointer"
-                      >
+                    <div className="flex-1 min-w-0 select-none">
+                      <div className="text-sm font-medium leading-none">
                         {bookmark.title}
-                      </label>
-                      <p className="text-sm text-muted-foreground truncate">
+                      </div>
+                      <p className="text-sm text-muted-foreground truncate mt-1">
                         {bookmark.url}
                       </p>
                     </div>
@@ -246,9 +251,9 @@ export function ImportButton() {
             <div className="mt-6 flex justify-end pt-4 border-t">
               <Button
                 onClick={handleImport}
-                disabled={isLoading || selectedBookmarks.size === 0}
+                disabled={isLoading || selectedIds.length === 0}
               >
-                {isLoading ? '导入中...' : `导入 ${selectedBookmarks.size} 个书签`}
+                {isLoading ? '导入中...' : `导入 ${selectedIds.length} 个书签`}
               </Button>
             </div>
           </div>
