@@ -10,7 +10,7 @@ export function ImportButton() {
   }
 
   return (
-    <Button onClick={handleImport}>
+    <Button variant="outline" onClick={handleImport}>
       <PlusIcon className="mr-2 h-4 w-4" />
       导入书签
     </Button>

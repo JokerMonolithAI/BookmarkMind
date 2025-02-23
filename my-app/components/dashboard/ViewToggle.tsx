@@ -12,26 +12,23 @@ export function ViewToggle() {
   const [view, setView] = useState<'list' | 'mind-map' | 'timeline'>('list')
 
   return (
-    <div className="flex items-center gap-2 rounded-lg border bg-white p-1">
+    <div className="flex items-center gap-2">
       <Button
-        variant={view === 'list' ? 'default' : 'ghost'}
-        size="sm"
+        variant={view === 'list' ? 'outline' : 'ghost'}
         onClick={() => setView('list')}
       >
         <ListIcon className="mr-2 h-4 w-4" />
         列表视图
       </Button>
       <Button
-        variant={view === 'mind-map' ? 'default' : 'ghost'}
-        size="sm"
+        variant={view === 'mind-map' ? 'outline' : 'ghost'}
         onClick={() => setView('mind-map')}
       >
         <NetworkIcon className="mr-2 h-4 w-4" />
         脑图视图
       </Button>
       <Button
-        variant={view === 'timeline' ? 'default' : 'ghost'}
-        size="sm"
+        variant={view === 'timeline' ? 'outline' : 'ghost'}
         onClick={() => setView('timeline')}
       >
         <ClockIcon className="mr-2 h-4 w-4" />

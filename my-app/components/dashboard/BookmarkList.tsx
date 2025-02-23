@@ -27,7 +27,7 @@ export function BookmarkList() {
   return (
     <div className="space-y-4">
       {bookmarks.map((bookmark) => (
-        <Card key={bookmark.id} className="p-4">
+        <Card key={bookmark.id} className="p-4 bg-card">
           <div className="flex items-start gap-4">
             <img 
               src={bookmark.favicon} 
@@ -39,16 +39,16 @@ export function BookmarkList() {
                 href={bookmark.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-lg font-medium hover:underline"
+                className="text-lg font-medium hover:underline text-foreground"
               >
                 {bookmark.title}
               </a>
-              <p className="mt-1 text-sm text-gray-500">{bookmark.url}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{bookmark.url}</p>
               <div className="mt-2 flex gap-2">
                 {bookmark.tags.map((tag) => (
                   <span 
                     key={tag}
-                    className="rounded-full bg-gray-100 px-2 py-1 text-xs"
+                    className="rounded-full bg-secondary px-2 py-1 text-xs text-secondary-foreground"
                   >
                     {tag}
                   </span>
