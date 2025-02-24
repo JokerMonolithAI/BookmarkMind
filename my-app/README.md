@@ -11,16 +11,28 @@
 - Shadcn/ui（UI组件库）
 
 ## 功能实现状态
-- [ ] 用户认证系统
-  - [ ] 邮箱注册
-  - [ ] 邮箱登录
-  - [ ] Google账号登录
-  - [ ] 密码重置
-  - [ ] 用户资料管理
+- [x] 用户认证系统
+  - [x] 邮箱注册
+  - [x] 邮箱登录
+  - [x] Google账号登录
+  - [x] 密码重置
+  - [x] 用户资料管理
+- [x] 书签导入与解析
+  - [x] 支持主流浏览器书签格式导入
+  - [x] 自动解析书签URL、标题、描述等信息
+  - [x] 书签去重功能
 - [ ] 数据管理
   - [ ] 保存用户数据
   - [ ] 获取用户数据
   - [ ] 更新用户数据
+- [ ] 智能分析与总结
+  - [ ] 关键词提取
+  - [ ] 主题分类
+  - [ ] 内容总结
+- [ ] 脑图生成与编辑
+  - [ ] 自动生成脑图
+  - [ ] 脑图编辑功能
+  - [ ] 导出分享功能
 
 ## 项目结构
 ```
@@ -55,22 +67,29 @@ cd my-app
 2. 安装依赖
 ```bash
 npm install
-npm install firebase
-npm install firebase-auth
-npm install lucide-react @radix-ui/react-slot class-variance-authority clsx tailwind-merge
-npm install next-themes
+
+# Firebase 相关
+npm install firebase firebase-auth
+
+# UI 组件和工具库
 npm install -D @shadcn/ui
-npm install @radix-ui/react-dialog @radix-ui/react-select lucide-react
-npm install clsx tailwind-merge
+npm install lucide-react
+npm install next-themes
+npm install tailwindcss-animate
+
+# Radix UI 组件
+npm install @radix-ui/react-dialog
+npm install @radix-ui/react-select
 npm install @radix-ui/react-checkbox
-npm install next-themes tailwindcss-animate
-npm install clsx tailwind-merge
-npm install next-themes
-npm install lucide-react
-npm install @radix-ui/react-dropdown-menu @radix-ui/react-slot class-variance-authority clsx tailwind-merge
-npm install next-themes
-npm install lucide-react
+npm install @radix-ui/react-dropdown-menu
+npm install @radix-ui/react-slot
+
+# 工具库
+npm install class-variance-authority
+npm install clsx
+npm install tailwind-merge
 ```
+
 3. 配置环境变量
 复制 `.env.local.example` 文件为 `.env.local`，并填入你的 Firebase 配置信息：
 ```
