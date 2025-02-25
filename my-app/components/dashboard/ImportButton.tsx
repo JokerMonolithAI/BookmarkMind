@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from 'sonner'
+import { useBookmarks } from '@/context/BookmarkContext'
 
 // 添加一个生成唯一ID的函数
 const generateUniqueId = () => {
@@ -34,6 +35,7 @@ export function ImportButton() {
   const [bookmarks, setBookmarks] = useState<(Bookmark & { id: string })[]>([])
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [step, setStep] = useState<'upload' | 'select'>('upload')
+  const { saveBookmarks } = useBookmarks()
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
@@ -57,6 +59,8 @@ export function ImportButton() {
       toast.error('导入失败，请检查文件格式是否正确')
     } finally {
       setIsLoading(false)
+      // 清空文件输入，以便可以再次选择同一文件
+      event.target.value = ''
     }
   }
 
@@ -64,6 +68,13 @@ export function ImportButton() {
     try {
       setIsLoading(true)
       const selectedBookmarksList = bookmarks.filter(b => selectedIds.includes(b.id))
+      
+      const bookmarksRecord = selectedBookmarksList.reduce((acc, bookmark) => {
+        acc[bookmark.id] = bookmark;
+        return acc;
+      }, {} as Record<string, Bookmark>);
+      
+      await saveBookmarks(bookmarksRecord, {});
       
       const response = await fetch('/api/bookmarks/import', {
         method: 'POST',

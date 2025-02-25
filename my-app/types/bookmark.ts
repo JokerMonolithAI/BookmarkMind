@@ -1,18 +1,25 @@
 export interface Bookmark {
-  id?: string
+  id: string
   url: string
   title: string
   description?: string
   favicon?: string
-  addedAt: Date
-  folderId?: string
+  addedAt: number
   tags?: string[]
+  folderId?: string
 }
 
 export interface BookmarkFolder {
   id: string
   name: string
   parentId?: string
+  createdAt: number
+}
+
+export interface UserBookmarkData {
+  bookmarks: Record<string, Bookmark>
+  folders: Record<string, BookmarkFolder>
+  lastUpdated: number
 }
 
 export type BrowserType = 'chrome' | 'firefox' | 'edge' | 'safari' 
