@@ -1,23 +1,68 @@
-import { database } from './firebase';
-import { ref, set, get, child } from 'firebase/database';
+import { db } from './firebase';
+import { ref, set, get, child, update } from 'firebase/database';
 import { Bookmark, BookmarkFolder, UserBookmarkData } from '../types/bookmark';
+import { normalizeUrl } from '../utils/url-utils';
 
 // 保存用户的书签数据
 export async function saveUserBookmarks(
   userId: string, 
   bookmarks: Record<string, Bookmark>,
   folders: Record<string, BookmarkFolder>
-): Promise<void> {
+): Promise<{
+  dbDuplicates: number;
+  savedCount: number;
+}> {
   try {
-    const userBookmarksRef = ref(database, `users/${userId}/bookmarks`);
+    // 获取现有书签进行对比去重
+    const dbRef = ref(db);
+    const snapshot = await get(child(dbRef, `users/${userId}/bookmarks`));
+    let existingBookmarks: Record<string, Bookmark> = {};
+    
+    if (snapshot.exists()) {
+      const data = snapshot.val();
+      existingBookmarks = data.bookmarks || {};
+    }
+    
+    // 准备最终要保存的书签
+    const finalBookmarks: Record<string, Bookmark> = {};
+    let dbDuplicates = 0;
+    
+    // 将书签与数据库中的书签对比
+    Object.values(bookmarks).forEach(bookmark => {
+      const normalizedUrl = normalizeUrl(bookmark.url);
+      let isDuplicate = false;
+      
+      // 检查是否与数据库中的书签重复
+      for (const key in existingBookmarks) {
+        if (normalizeUrl(existingBookmarks[key].url) === normalizedUrl) {
+          isDuplicate = true;
+          dbDuplicates++;
+          break;
+        }
+      }
+      
+      // 如果不是重复书签，添加到最终书签列表
+      if (!isDuplicate) {
+        finalBookmarks[bookmark.id] = bookmark;
+      }
+    });
+    
+    // 保存最终的书签数据
+    const userBookmarksRef = ref(db, `users/${userId}/bookmarks`);
     const userData: UserBookmarkData = {
-      bookmarks,
+      bookmarks: finalBookmarks,
       folders,
       lastUpdated: Date.now()
     };
     
     await set(userBookmarksRef, userData);
     console.log('Bookmarks saved successfully');
+    
+    // 返回去重信息
+    return {
+      dbDuplicates,
+      savedCount: Object.keys(finalBookmarks).length
+    };
   } catch (error) {
     console.error('Error saving bookmarks:', error);
     throw error;
@@ -27,7 +72,7 @@ export async function saveUserBookmarks(
 // 获取用户的书签数据
 export async function getUserBookmarks(userId: string): Promise<UserBookmarkData | null> {
   try {
-    const dbRef = ref(database);
+    const dbRef = ref(db);
     const snapshot = await get(child(dbRef, `users/${userId}/bookmarks`));
     
     if (snapshot.exists()) {
@@ -49,11 +94,11 @@ export async function updateBookmark(
   bookmarkData: Partial<Bookmark>
 ): Promise<void> {
   try {
-    const bookmarkRef = ref(database, `users/${userId}/bookmarks/bookmarks/${bookmarkId}`);
+    const bookmarkRef = ref(db, `users/${userId}/bookmarks/bookmarks/${bookmarkId}`);
     await set(bookmarkRef, bookmarkData);
     
     // 更新最后修改时间
-    const lastUpdatedRef = ref(database, `users/${userId}/bookmarks/lastUpdated`);
+    const lastUpdatedRef = ref(db, `users/${userId}/bookmarks/lastUpdated`);
     await set(lastUpdatedRef, Date.now());
     
     console.log('Bookmark updated successfully');
@@ -66,11 +111,11 @@ export async function updateBookmark(
 // 删除书签
 export async function deleteBookmark(userId: string, bookmarkId: string): Promise<void> {
   try {
-    const bookmarkRef = ref(database, `users/${userId}/bookmarks/bookmarks/${bookmarkId}`);
+    const bookmarkRef = ref(db, `users/${userId}/bookmarks/bookmarks/${bookmarkId}`);
     await set(bookmarkRef, null);
     
     // 更新最后修改时间
-    const lastUpdatedRef = ref(database, `users/${userId}/bookmarks/lastUpdated`);
+    const lastUpdatedRef = ref(db, `users/${userId}/bookmarks/lastUpdated`);
     await set(lastUpdatedRef, Date.now());
     
     console.log('Bookmark deleted successfully');

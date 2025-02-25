@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { Suspense } from 'react'
 import { BookmarkStats } from '@/components/dashboard/BookmarkStats'
-import { BookmarkList } from '@/components/dashboard/BookmarkList'
+import BookmarkList from '@/components/dashboard/BookmarkList'
 import { MindMap } from '@/components/dashboard/MindMap'
-import { ImportButton } from '@/components/dashboard/ImportButton'
+import ImportButton from '@/components/dashboard/ImportButton'
 import { ViewToggle } from '@/components/dashboard/ViewToggle'
 import { SearchBar } from '@/components/dashboard/SearchBar'
 import { Loading } from '@/components/ui/loading'
