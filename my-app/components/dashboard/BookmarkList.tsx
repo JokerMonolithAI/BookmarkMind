@@ -4,10 +4,21 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
 import { ref, onValue } from 'firebase/database';
-import { Bookmark } from '@/services/bookmark-service';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ExternalLink, Star, Clock, Tag, Trash } from 'lucide-react';
+
+// 在本地定义 Bookmark 接口
+interface Bookmark {
+  id: string;
+  url: string;
+  title: string;
+  description?: string;
+  favicon?: string;
+  createdAt: number;
+  addedAt: number;
+  tags?: string[];
+}
 
 export default function BookmarkList() {
   const { user } = useAuth();

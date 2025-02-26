@@ -3,6 +3,18 @@ import { ref, set, get, child, update } from 'firebase/database';
 import { Bookmark, BookmarkFolder, UserBookmarkData } from '../types/bookmark';
 import { normalizeUrl } from '../utils/url-utils';
 
+// 修改 bookmarkService.ts 文件，添加 export 关键字
+export interface Bookmark {
+  id: string;
+  url: string;
+  title: string;
+  description?: string;
+  favicon?: string;
+  createdAt: number;
+  addedAt: number;
+  tags?: string[];
+}
+
 // 保存用户的书签数据
 export async function saveUserBookmarks(
   userId: string, 
@@ -16,25 +28,37 @@ export async function saveUserBookmarks(
     // 获取现有书签进行对比去重
     const dbRef = ref(db);
     const snapshot = await get(child(dbRef, `users/${userId}/bookmarks`));
-    let existingBookmarks: Record<string, Bookmark> = {};
+    let existingData: UserBookmarkData = {
+      bookmarks: {},
+      folders: {},
+      lastUpdated: Date.now()
+    };
     
     if (snapshot.exists()) {
       const data = snapshot.val();
-      existingBookmarks = data.bookmarks || {};
+      // 处理可能的数据结构差异
+      if (data.bookmarks) {
+        existingData = data as UserBookmarkData;
+      } else {
+        // 如果数据直接是书签对象，适配到正确的结构
+        existingData.bookmarks = data;
+      }
     }
     
-    // 准备最终要保存的书签
-    const finalBookmarks: Record<string, Bookmark> = {};
+    // 准备最终要保存的书签 - 从现有书签开始
+    const finalBookmarks: Record<string, Bookmark> = { ...existingData.bookmarks };
+    const finalFolders: Record<string, BookmarkFolder> = { ...existingData.folders, ...folders };
     let dbDuplicates = 0;
+    let savedCount = 0;
     
-    // 将书签与数据库中的书签对比
+    // 将新书签与数据库中的书签对比
     Object.values(bookmarks).forEach(bookmark => {
       const normalizedUrl = normalizeUrl(bookmark.url);
       let isDuplicate = false;
       
       // 检查是否与数据库中的书签重复
-      for (const key in existingBookmarks) {
-        if (normalizeUrl(existingBookmarks[key].url) === normalizedUrl) {
+      for (const key in existingData.bookmarks) {
+        if (normalizeUrl(existingData.bookmarks[key].url) === normalizedUrl) {
           isDuplicate = true;
           dbDuplicates++;
           break;
@@ -44,24 +68,35 @@ export async function saveUserBookmarks(
       // 如果不是重复书签，添加到最终书签列表
       if (!isDuplicate) {
         finalBookmarks[bookmark.id] = bookmark;
+        savedCount++;
       }
     });
     
-    // 保存最终的书签数据
-    const userBookmarksRef = ref(db, `users/${userId}/bookmarks`);
+    // 保存最终的书签数据 - 使用 update 而不是 set
+    const userBookmarksRef = ref(db, `users/${userId}`);
     const userData: UserBookmarkData = {
       bookmarks: finalBookmarks,
-      folders,
+      folders: finalFolders,
       lastUpdated: Date.now()
     };
     
-    await set(userBookmarksRef, userData);
+    // 验证数据不为空
+    if (Object.keys(finalBookmarks).length === 0 && Object.keys(existingData.bookmarks).length > 0) {
+      console.warn('No new bookmarks to save and would overwrite existing data - aborting');
+      return {
+        dbDuplicates,
+        savedCount: 0
+      };
+    }
+    
+    // 使用 update 而不是 set
+    await update(userBookmarksRef, { bookmarks: userData });
     console.log('Bookmarks saved successfully');
     
     // 返回去重信息
     return {
       dbDuplicates,
-      savedCount: Object.keys(finalBookmarks).length
+      savedCount
     };
   } catch (error) {
     console.error('Error saving bookmarks:', error);
