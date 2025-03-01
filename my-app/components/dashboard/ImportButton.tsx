@@ -63,18 +63,11 @@ export default function ImportButton() {
               <BookmarkImport />
               
               <DialogFooter className="mt-2 flex-col gap-2 sm:flex-row">
-                <Button 
-                  variant="outline" 
-                  onClick={() => setOpen(false)}
-                  className="w-full sm:w-auto h-10 px-4 py-2.5 border border-gray-200 rounded-md bg-white hover:bg-gray-50 text-gray-700 font-medium transition-colors duration-200"
-                >
-                  取消
-                </Button>
                 <Button
                   onClick={() => setOpen(false)}
                   className="w-full sm:w-auto h-10 px-4 py-2.5 border border-transparent rounded-md bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors duration-200"
                 >
-                  确认导入
+                  关闭
                 </Button>
               </DialogFooter>
             </DialogContent>
