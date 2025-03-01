@@ -5,9 +5,8 @@ import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
 import { ref, get, remove } from 'firebase/database';
 import { Button } from '@/components/ui/button';
-import { ExternalLink, Trash, Search } from 'lucide-react';
+import { ExternalLink, Trash } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
-import { Input } from '@/components/ui/input';
 import { useView } from './ViewToggle';
 
 // 在本地定义 Bookmark 接口
@@ -28,7 +27,6 @@ export default function BookmarkList() {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [filteredBookmarks, setFilteredBookmarks] = useState<Bookmark[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const bookmarksPerPage = 12;
 
@@ -114,10 +112,7 @@ export default function BookmarkList() {
       // 更新本地状态
       const updatedBookmarks = bookmarks.filter(bookmark => bookmark.id !== id);
       setBookmarks(updatedBookmarks);
-      setFilteredBookmarks(updatedBookmarks.filter(bookmark => 
-        (bookmark.title && bookmark.title.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (bookmark.url && bookmark.url.toLowerCase().includes(searchTerm.toLowerCase()))
-      ));
+      setFilteredBookmarks(updatedBookmarks);
       
       toast({
         title: "书签已删除",
@@ -132,23 +127,6 @@ export default function BookmarkList() {
       });
     }
   };
-
-  // 搜索过滤
-  useEffect(() => {
-    if (searchTerm.trim() === '') {
-      setFilteredBookmarks(bookmarks);
-    } else {
-      const term = searchTerm.toLowerCase();
-      const filtered = bookmarks.filter(bookmark => 
-        (bookmark.title && bookmark.title.toLowerCase().includes(term)) ||
-        (bookmark.url && bookmark.url.toLowerCase().includes(term)) ||
-        (bookmark.description && bookmark.description.toLowerCase().includes(term)) ||
-        (bookmark.tags && bookmark.tags.some(tag => tag.toLowerCase().includes(term)))
-      );
-      setFilteredBookmarks(filtered);
-    }
-    setCurrentPage(1); // 重置到第一页
-  }, [searchTerm, bookmarks]);
 
   // 获取当前页的书签
   const getCurrentPageBookmarks = () => {
@@ -194,25 +172,6 @@ export default function BookmarkList() {
 
   return (
     <div className="space-y-6">
-      {/* 搜索和统计信息 */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="flex-1">
-          <h2 className="text-lg font-semibold text-gray-900">我的书签</h2>
-          <p className="text-sm text-gray-500 mt-1">共 {bookmarks.length} 个书签</p>
-        </div>
-        
-        <div className="relative w-full sm:w-64">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <Input
-            type="search"
-            placeholder="搜索书签..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-9 h-10 w-full border border-gray-200 rounded-md shadow-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 focus:outline-none transition-all duration-200"
-          />
-        </div>
-      </div>
-      
       {/* 书签列表 */}
       {filteredBookmarks.length === 0 ? (
         <div className="py-12 text-center bg-gray-50 rounded-lg">
