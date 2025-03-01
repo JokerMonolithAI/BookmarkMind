@@ -57,20 +57,15 @@ function DashboardContent() {
               </div>
             }>
               <div className="p-4 max-h-[calc(100vh-220px)] overflow-y-auto">
-                <BookmarkList />
+                {/* 根据当前视图显示不同内容 */}
+                {activeView === 'list' && <BookmarkList />}
+                {activeView === 'grid' && <MindMap />}
+                {activeView === 'timeline' && (
+                  <div className="h-64 flex items-center justify-center text-gray-500">
+                    时间轴视图正在开发中...
+                  </div>
+                )}
               </div>
-              
-              {/* 根据当前视图显示或隐藏脑图区域 */}
-              {activeView !== 'list' && (
-                <div className="p-4 mt-6 border-t border-gray-100">
-                  {activeView === 'grid' && <MindMap />}
-                  {activeView === 'timeline' && (
-                    <div className="h-64 flex items-center justify-center text-gray-500">
-                      时间轴视图正在开发中...
-                    </div>
-                  )}
-                </div>
-              )}
             </Suspense>
           </div>
         </div>
