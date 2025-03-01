@@ -84,6 +84,7 @@ npm install @radix-ui/react-checkbox
 npm install @radix-ui/react-dropdown-menu
 npm install @radix-ui/react-slot
 npm install @radix-ui/react-progress @radix-ui/react-tooltip
+npm install @radix-ui/react-alert-dialog
 
 # 工具库
 npm install class-variance-authority

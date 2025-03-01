@@ -8,6 +8,16 @@ import { Button } from '@/components/ui/button';
 import { ExternalLink, Trash } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { useView } from './ViewToggle';
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // 在本地定义 Bookmark 接口
 interface Bookmark {
@@ -29,6 +39,8 @@ export default function BookmarkList() {
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const bookmarksPerPage = 12;
+  const [bookmarkToDelete, setBookmarkToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchBookmarks = async () => {
     if (!user) return;
@@ -36,8 +48,8 @@ export default function BookmarkList() {
     try {
       setLoading(true);
       
-      // 获取数据库引用
-      const bookmarksRef = ref(db, `users/${user.uid}/bookmarks`);
+      // 获取数据库引用 - 修复路径，添加额外的 bookmarks 层级
+      const bookmarksRef = ref(db, `users/${user.uid}/bookmarks/bookmarks`);
       
       // 获取快照
       const snapshot = await get(bookmarksRef);
@@ -106,8 +118,29 @@ export default function BookmarkList() {
     if (!user) return;
     
     try {
-      const bookmarkRef = ref(db, `users/${user.uid}/bookmarks/${id}`);
+      setIsDeleting(true);
+      
+      // 从数据库中删除书签 - 修复路径，添加额外的 bookmarks 层级
+      console.log(`尝试删除书签: ${id}`);
+      console.log(`删除路径: users/${user.uid}/bookmarks/bookmarks/${id}`);
+      
+      const bookmarkRef = ref(db, `users/${user.uid}/bookmarks/bookmarks/${id}`);
+      
+      // 检查书签是否存在
+      const snapshot = await get(bookmarkRef);
+      if (!snapshot.exists()) {
+        console.error(`书签不存在: ${id}`);
+        toast({
+          title: "删除失败",
+          description: "找不到要删除的书签",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // 执行删除操作
       await remove(bookmarkRef);
+      console.log(`书签已从数据库中删除: ${id}`);
       
       // 更新本地状态
       const updatedBookmarks = bookmarks.filter(bookmark => bookmark.id !== id);
@@ -116,15 +149,26 @@ export default function BookmarkList() {
       
       toast({
         title: "书签已删除",
-        description: "书签已成功删除",
+        description: "书签已成功从数据库中删除",
       });
     } catch (error) {
       console.error('Error deleting bookmark:', error);
+      
+      // 详细记录错误信息
+      if (error instanceof Error) {
+        console.error(`错误类型: ${error.name}`);
+        console.error(`错误消息: ${error.message}`);
+        console.error(`错误堆栈: ${error.stack}`);
+      }
+      
       toast({
         title: "删除书签失败",
-        description: "请稍后重试",
+        description: "无法从数据库中删除书签，请检查控制台获取详细错误信息",
         variant: "destructive"
       });
+    } finally {
+      setIsDeleting(false);
+      setBookmarkToDelete(null);
     }
   };
 
@@ -244,7 +288,8 @@ export default function BookmarkList() {
                       variant="ghost" 
                       size="sm" 
                       className="h-8 w-8 p-0 rounded-full text-gray-500 hover:text-red-600 hover:bg-red-50"
-                      onClick={() => deleteBookmark(bookmark.id)}
+                      onClick={() => setBookmarkToDelete(bookmark.id)}
+                      disabled={isDeleting}
                     >
                       <Trash className="h-4 w-4" />
                       <span className="sr-only">删除</span>
@@ -319,6 +364,35 @@ export default function BookmarkList() {
           )}
         </>
       )}
+      
+      {/* 删除确认对话框 */}
+      <AlertDialog open={!!bookmarkToDelete} onOpenChange={(open) => !open && setBookmarkToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除</AlertDialogTitle>
+            <AlertDialogDescription>
+              您确定要删除这个书签吗？此操作无法撤销，书签将从数据库中永久删除。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => bookmarkToDelete && deleteBookmark(bookmarkToDelete)}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {isDeleting ? (
+                <>
+                  <span className="mr-2">删除中</span>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-solid border-white border-r-transparent"></div>
+                </>
+              ) : (
+                "删除"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 } 
