@@ -1,11 +1,23 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, createContext, useContext } from 'react'
 import { Button } from '@/components/ui/button'
 import { List, Grid3X3, Clock } from 'lucide-react'
 
+// 创建一个上下文来共享视图状态
+export const ViewContext = createContext<{
+  activeView: 'list' | 'grid' | 'timeline';
+  setActiveView: (view: 'list' | 'grid' | 'timeline') => void;
+}>({
+  activeView: 'list',
+  setActiveView: () => {},
+});
+
+// 自定义钩子，方便在其他组件中使用
+export const useView = () => useContext(ViewContext);
+
 export function ViewToggle() {
-  const [activeView, setActiveView] = useState<'list' | 'grid' | 'timeline'>('list');
+  const { activeView, setActiveView } = useView();
 
   return (
     <div className="flex items-center bg-gray-100 p-1 rounded-md">
@@ -52,4 +64,15 @@ export function ViewToggle() {
       </Button>
     </div>
   )
+}
+
+// 提供视图上下文的组件
+export function ViewProvider({ children }: { children: React.ReactNode }) {
+  const [activeView, setActiveView] = useState<'list' | 'grid' | 'timeline'>('list');
+  
+  return (
+    <ViewContext.Provider value={{ activeView, setActiveView }}>
+      {children}
+    </ViewContext.Provider>
+  );
 } 
