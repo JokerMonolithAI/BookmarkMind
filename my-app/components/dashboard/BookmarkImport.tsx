@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { saveUserBookmarks } from '@/lib/bookmarkService';
+import { apiService } from '@/lib/apiService';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { parseBookmarkFile } from '@/utils/bookmark-parser';
 import { Bookmark } from '@/types/bookmark';
-import { FileUp, CheckCircle, AlertCircle, FileIcon, X, Loader2, RefreshCw } from 'lucide-react';
+import { FileUp, CheckCircle, AlertCircle, FileIcon, X, Loader2, RefreshCw, Zap } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox';
 
 export default function BookmarkImport() {
   const { user } = useAuth();
@@ -20,7 +22,18 @@ export default function BookmarkImport() {
     importDuplicates?: number;
     dbDuplicates?: number;
     totalImported?: number;
+    analyzedCount?: number;
   } | null>(null);
+  
+  // 添加分析选项
+  const [analyzeBookmarks, setAnalyzeBookmarks] = useState(true);
+  const [analysisOptions, setAnalysisOptions] = useState({
+    extractContent: true,
+    generateSummary: true,
+    extractKeywords: true,
+    extractTags: true,
+    maxSummaryLength: 300
+  });
 
   // 使用 useRef 而不是 useState 来跟踪计时器
   const progressTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -99,7 +112,7 @@ export default function BookmarkImport() {
       
       // 更新进度 - 解析开始
       console.log('开始解析文件');
-      updateProgress(40);
+      updateProgress(20);
       
       // 1. 解析书签文件并获取去重信息
       console.time('parseBookmarkFile');
@@ -108,7 +121,7 @@ export default function BookmarkImport() {
       console.log(`解析完成，获取到 ${parsedBookmarks.length} 个书签，${importDuplicates} 个重复`);
       
       // 更新进度 - 解析完成
-      updateProgress(60);
+      updateProgress(40);
       
       // 2. 将去重后的书签转换为对象
       console.log('转换书签格式');
@@ -122,7 +135,7 @@ export default function BookmarkImport() {
       });
       
       // 更新进度 - 转换完成
-      updateProgress(80);
+      updateProgress(50);
       
       // 3. 与数据库中的书签对比去重并保存
       console.log('开始保存到数据库');
@@ -132,6 +145,42 @@ export default function BookmarkImport() {
       console.log(`保存完成，跳过了 ${result.dbDuplicates} 个重复，保存了 ${result.savedCount} 个书签`);
       
       // 更新进度 - 保存完成
+      updateProgress(70);
+      
+      // 4. 如果启用了分析，调用API分析书签
+      let analyzedCount = 0;
+      if (analyzeBookmarks && result.savedCount > 0) {
+        console.log('开始分析书签');
+        updateProgress(75);
+        
+        try {
+          // 准备要分析的书签数组
+          const bookmarksToAnalyze = Object.entries(bookmarksObject)
+            .filter(([id, _]) => !result.existingBookmarkIds?.includes(id))
+            .map(([id, bookmark]) => ({
+              id,
+              url: bookmark.url
+            }));
+          
+          if (bookmarksToAnalyze.length > 0) {
+            console.log(`准备分析 ${bookmarksToAnalyze.length} 个书签`);
+            
+            // 调用批量分析API
+            const analysisResult = await apiService.analyzeBatchBookmarks(
+              bookmarksToAnalyze,
+              analysisOptions
+            );
+            
+            analyzedCount = analysisResult.successCount;
+            console.log(`成功分析了 ${analyzedCount} 个书签`);
+          }
+        } catch (error) {
+          console.error('分析书签时出错:', error);
+          // 分析失败不影响整体导入流程，继续执行
+        }
+      }
+      
+      // 更新进度 - 分析完成
       updateProgress(100);
       
       // 显示结果
@@ -141,7 +190,8 @@ export default function BookmarkImport() {
         message: '', // 移除重复的成功消息
         importDuplicates,
         dbDuplicates: result.dbDuplicates,
-        totalImported: result.savedCount
+        totalImported: result.savedCount,
+        analyzedCount: analyzedCount
       });
       
       // 注意：这里不设置 isImporting = false，保持导入状态
@@ -201,6 +251,72 @@ export default function BookmarkImport() {
             <p className="text-xs text-muted-foreground">
               支持 HTML 和 JSON 格式的书签文件
             </p>
+          </div>
+          
+          {/* 分析选项 */}
+          <div className="w-full space-y-2 rounded-lg border p-3">
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="analyze-bookmarks"
+                checked={analyzeBookmarks}
+                onCheckedChange={(checked) => setAnalyzeBookmarks(checked === true)}
+              />
+              <label
+                htmlFor="analyze-bookmarks"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center"
+              >
+                <Zap className="h-3.5 w-3.5 mr-1.5 text-yellow-500" />
+                智能分析书签内容
+              </label>
+            </div>
+            
+            {analyzeBookmarks && (
+              <div className="ml-6 mt-2 space-y-2 text-xs text-gray-500">
+                <p>将自动分析书签网页内容，提取关键信息并生成摘要和标签</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="extract-content"
+                      checked={analysisOptions.extractContent}
+                      onCheckedChange={(checked) => 
+                        setAnalysisOptions(prev => ({...prev, extractContent: checked === true}))
+                      }
+                    />
+                    <label htmlFor="extract-content" className="text-xs">提取内容</label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="generate-summary"
+                      checked={analysisOptions.generateSummary}
+                      onCheckedChange={(checked) => 
+                        setAnalysisOptions(prev => ({...prev, generateSummary: checked === true}))
+                      }
+                    />
+                    <label htmlFor="generate-summary" className="text-xs">生成摘要</label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="extract-keywords"
+                      checked={analysisOptions.extractKeywords}
+                      onCheckedChange={(checked) => 
+                        setAnalysisOptions(prev => ({...prev, extractKeywords: checked === true}))
+                      }
+                    />
+                    <label htmlFor="extract-keywords" className="text-xs">提取关键词</label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="extract-tags"
+                      checked={analysisOptions.extractTags}
+                      onCheckedChange={(checked) => 
+                        setAnalysisOptions(prev => ({...prev, extractTags: checked === true}))
+                      }
+                    />
+                    <label htmlFor="extract-tags" className="text-xs">生成标签</label>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       ) : (
@@ -319,6 +435,12 @@ export default function BookmarkImport() {
                           <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
                           成功导入 {importResult.totalImported} 个书签
                         </li>
+                        {analyzeBookmarks && importResult.analyzedCount !== undefined && (
+                          <li className="flex items-center gap-2">
+                            <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                            成功分析 {importResult.analyzedCount} 个书签内容
+                          </li>
+                        )}
                       </ul>
                     </div>
                   )}

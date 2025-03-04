@@ -1,9 +1,9 @@
 import { db } from './firebase';
 import { ref, set, get, child, update } from 'firebase/database';
-import { Bookmark, BookmarkFolder, UserBookmarkData } from '../types/bookmark';
+import { BookmarkFolder, UserBookmarkData } from '../types/bookmark';
 import { normalizeUrl } from '../utils/url-utils';
 
-// 修改 bookmarkService.ts 文件，添加 export 关键字
+// 定义书签接口
 export interface Bookmark {
   id: string;
   url: string;
@@ -23,6 +23,7 @@ export async function saveUserBookmarks(
 ): Promise<{
   dbDuplicates: number;
   savedCount: number;
+  existingBookmarkIds?: string[];
 }> {
   try {
     // 获取现有书签进行对比去重
@@ -48,8 +49,11 @@ export async function saveUserBookmarks(
     // 准备最终要保存的书签 - 从现有书签开始
     const finalBookmarks: Record<string, Bookmark> = { ...existingData.bookmarks };
     const finalFolders: Record<string, BookmarkFolder> = { ...existingData.folders, ...folders };
+    
+    // 跟踪重复和新增的书签
     let dbDuplicates = 0;
     let savedCount = 0;
+    const existingBookmarkIds: string[] = [];
     
     // 将新书签与数据库中的书签对比
     Object.values(bookmarks).forEach(bookmark => {
@@ -61,6 +65,7 @@ export async function saveUserBookmarks(
         if (normalizeUrl(existingData.bookmarks[key].url) === normalizedUrl) {
           isDuplicate = true;
           dbDuplicates++;
+          existingBookmarkIds.push(key);
           break;
         }
       }
@@ -85,7 +90,8 @@ export async function saveUserBookmarks(
       console.warn('No new bookmarks to save and would overwrite existing data - aborting');
       return {
         dbDuplicates,
-        savedCount: 0
+        savedCount: 0,
+        existingBookmarkIds
       };
     }
     
@@ -96,7 +102,8 @@ export async function saveUserBookmarks(
     // 返回去重信息
     return {
       dbDuplicates,
-      savedCount
+      savedCount,
+      existingBookmarkIds
     };
   } catch (error) {
     console.error('Error saving bookmarks:', error);

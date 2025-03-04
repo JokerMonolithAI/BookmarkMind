@@ -21,6 +21,7 @@
   - [x] 支持主流浏览器书签格式导入
   - [x] 自动解析书签URL、标题、描述等信息
   - [x] 书签去重功能
+  - [x] 导入时智能分析书签内容
 - [x] 数据管理
   - [x] 保存用户数据
   - [x] 获取用户数据
@@ -30,10 +31,12 @@
   - [x] 总书签数统计
   - [x] 本周新增统计
   - [ ] 分类统计
-- [ ] 智能分析与总结
-  - [ ] 关键词提取
-  - [ ] 主题分类
-  - [ ] 内容总结
+- [x] 智能分析与总结
+  - [x] URL分析功能
+  - [x] 内容提取
+  - [x] 摘要生成
+  - [x] 关键词提取
+  - [x] 标签建议
 - [ ] 脑图生成与编辑
   - [ ] 自动生成脑图
   - [ ] 脑图编辑功能
@@ -51,10 +54,16 @@ my-app/
 ├── components/            # 可复用组件
 │   ├── ui/                # UI组件
 │   └── dashboard/         # 仪表板组件
+│       ├── BookmarkList.tsx    # 书签列表组件
+│       ├── BookmarkImport.tsx  # 书签导入组件
+│       ├── BookmarkStats.tsx   # 书签统计组件
 ├── context/              # 上下文管理
-│   └── AuthContext.tsx   # 认证上下文
+│   ├── AuthContext.tsx   # 认证上下文
+│   └── BookmarkContext.tsx # 书签上下文
 ├── lib/                  # 工具库
-│   └── firebase.ts      # Firebase配置
+│   ├── firebase.ts      # Firebase配置
+│   ├── bookmarkService.ts # 书签服务
+│   └── apiService.ts    # API服务
 └── public/              # 静态资源
 ```
 
@@ -64,6 +73,8 @@ my-app/
 - 添加了书签统计功能
 - 修复了数据库路径问题
 - 增强了错误处理和用户体验
+- 新增了书签导入时的智能分析功能，支持内容提取、摘要生成、关键词提取和标签建议
+- 集成了后端 API，实现了书签内容的智能分析
 
 ## 开始使用
 
@@ -116,6 +127,7 @@ NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=你的存储桶
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=你的发送者ID
 NEXT_PUBLIC_FIREBASE_APP_ID=你的应用ID
 NEXT_PUBLIC_FIREBASE_DATABASE_URL=你的数据库URL
+NEXT_PUBLIC_API_BASE_URL=你的API基础URL
 ```
 
 4. 启动开发服务器
