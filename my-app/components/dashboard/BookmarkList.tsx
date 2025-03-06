@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
 import { ref, get, remove } from 'firebase/database';
@@ -9,6 +9,7 @@ import { ExternalLink, Trash } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { useView } from './ViewToggle';
 import ImportButton from './ImportButton';
+import { eventService, EVENTS } from '@/lib/eventService';
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -43,7 +44,7 @@ export default function BookmarkList() {
   const [bookmarkToDelete, setBookmarkToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const fetchBookmarks = async () => {
+  const fetchBookmarks = useCallback(async () => {
     if (!user) return;
     
     try {
@@ -112,7 +113,7 @@ export default function BookmarkList() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   // 删除书签
   const deleteBookmark = async (id: string) => {
@@ -190,7 +191,24 @@ export default function BookmarkList() {
     if (user) {
       fetchBookmarks();
     }
-  }, [user]);
+  }, [user, fetchBookmarks]);
+
+  // 订阅书签导入成功事件
+  useEffect(() => {
+    // 定义事件处理函数
+    const handleBookmarksImported = () => {
+      console.log('检测到书签导入成功事件，刷新书签列表');
+      fetchBookmarks();
+    };
+    
+    // 订阅事件
+    eventService.subscribe(EVENTS.BOOKMARKS_IMPORTED, handleBookmarksImported);
+    
+    // 组件卸载时取消订阅
+    return () => {
+      eventService.unsubscribe(EVENTS.BOOKMARKS_IMPORTED, handleBookmarksImported);
+    };
+  }, [fetchBookmarks]);
 
   if (loading) {
     return (

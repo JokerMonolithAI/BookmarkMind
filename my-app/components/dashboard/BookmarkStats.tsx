@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
 import { ref, get } from 'firebase/database';
 import { Card } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
+import { eventService, EVENTS } from '@/lib/eventService';
 
 export function BookmarkStats() {
   const { user } = useAuth();
@@ -13,72 +14,93 @@ export function BookmarkStats() {
   const [newThisWeek, setNewThisWeek] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
 
-  useEffect(() => {
-    const fetchBookmarkStats = async () => {
-      if (!user) return;
+  // 将fetchBookmarkStats改为useCallback，以便在useEffect中使用
+  const fetchBookmarkStats = useCallback(async () => {
+    if (!user) return;
 
-      try {
-        setLoading(true);
-        const bookmarksRef = ref(db, `users/${user.uid}/bookmarks/bookmarks`);
-        const snapshot = await get(bookmarksRef);
+    try {
+      setLoading(true);
+      const bookmarksRef = ref(db, `users/${user.uid}/bookmarks/bookmarks`);
+      const snapshot = await get(bookmarksRef);
 
-        if (snapshot.exists()) {
-          const data = snapshot.val();
-          
-          // 处理数据，计算总数和本周新增
-          let bookmarksArray: any[] = [];
-          
-          // 检查数据结构，处理可能的嵌套情况
-          if (typeof data === 'object') {
-            // 直接遍历顶层对象
-            Object.keys(data).forEach(key => {
-              const item = data[key];
-              
-              // 检查是否是有效的书签对象
-              if (item && typeof item === 'object' && item.url) {
-                bookmarksArray.push({
-                  id: key,
-                  ...item
-                });
-              } else if (item && typeof item === 'object') {
-                // 可能是嵌套的情况，再遍历一层
-                Object.keys(item).forEach(subKey => {
-                  const subItem = item[subKey];
-                  if (subItem && typeof subItem === 'object' && subItem.url) {
-                    bookmarksArray.push({
-                      id: `${key}_${subKey}`,
-                      ...subItem
-                    });
-                  }
-                });
-              }
-            });
-          }
-
-          // 计算总书签数
-          setTotalBookmarks(bookmarksArray.length);
-          
-          // 计算本周新增
-          const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-          const recentBookmarks = bookmarksArray.filter(bookmark => {
-            const createdTime = bookmark.createdAt || bookmark.addedAt || 0;
-            return createdTime > oneWeekAgo;
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        
+        // 处理数据，计算总数和本周新增
+        let bookmarksArray: any[] = [];
+        
+        // 检查数据结构，处理可能的嵌套情况
+        if (typeof data === 'object') {
+          // 直接遍历顶层对象
+          Object.keys(data).forEach(key => {
+            const item = data[key];
+            
+            // 检查是否是有效的书签对象
+            if (item && typeof item === 'object' && item.url) {
+              bookmarksArray.push({
+                id: key,
+                ...item
+              });
+            } else if (item && typeof item === 'object') {
+              // 可能是嵌套的情况，再遍历一层
+              Object.keys(item).forEach(subKey => {
+                const subItem = item[subKey];
+                if (subItem && typeof subItem === 'object' && subItem.url) {
+                  bookmarksArray.push({
+                    id: `${key}_${subKey}`,
+                    ...subItem
+                  });
+                }
+              });
+            }
           });
-          
-          setNewThisWeek(recentBookmarks.length);
-        } else {
-          setTotalBookmarks(0);
-          setNewThisWeek(0);
         }
-      } catch (error) {
-        console.error('Error fetching bookmark stats:', error);
-      } finally {
-        setLoading(false);
+        
+        // 计算总数
+        setTotalBookmarks(bookmarksArray.length);
+        
+        // 计算本周新增
+        const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        const recentBookmarks = bookmarksArray.filter(bookmark => {
+          const createdTime = bookmark.createdAt || bookmark.addedAt || 0;
+          return createdTime > oneWeekAgo;
+        });
+        
+        setNewThisWeek(recentBookmarks.length);
+      } else {
+        setTotalBookmarks(0);
+        setNewThisWeek(0);
       }
-    };
-
-    fetchBookmarkStats();
+    } catch (error) {
+      console.error('Error fetching bookmark stats:', error);
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
+
+  // 初始加载
+  useEffect(() => {
+    if (user) {
+      fetchBookmarkStats();
+    }
+  }, [user, fetchBookmarkStats]);
+
+  // 订阅书签导入成功事件
+  useEffect(() => {
+    // 定义事件处理函数
+    const handleBookmarksImported = () => {
+      console.log('检测到书签导入成功事件，刷新书签统计');
+      fetchBookmarkStats();
+    };
+    
+    // 订阅事件
+    eventService.subscribe(EVENTS.BOOKMARKS_IMPORTED, handleBookmarksImported);
+    
+    // 组件卸载时取消订阅
+    return () => {
+      eventService.unsubscribe(EVENTS.BOOKMARKS_IMPORTED, handleBookmarksImported);
+    };
+  }, [fetchBookmarkStats]);
 
   if (loading) {
     return (

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { saveUserBookmarks } from '@/lib/bookmarkService';
 import { apiService } from '@/lib/apiService';
+import { eventService, EVENTS } from '@/lib/eventService';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { parseBookmarkFile } from '@/utils/bookmark-parser';
@@ -193,6 +194,9 @@ export default function BookmarkImport() {
         totalImported: result.savedCount,
         analyzedCount: analyzedCount
       });
+      
+      // 发布书签导入成功事件
+      eventService.publish(EVENTS.BOOKMARKS_IMPORTED);
       
       // 注意：这里不设置 isImporting = false，保持导入状态
       // 这样可以确保文件信息区域保持隐藏

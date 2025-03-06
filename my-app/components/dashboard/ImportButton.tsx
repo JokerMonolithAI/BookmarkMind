@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Import, FileUp, Info } from 'lucide-react'
 import {
@@ -14,16 +14,46 @@ import {
 } from "@/components/ui/dialog"
 import BookmarkImport from './BookmarkImport'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { eventService, EVENTS } from '@/lib/eventService'
 
 // 使用默认导出
 export default function ImportButton() {
   const [open, setOpen] = useState(false);
+  const importSuccessRef = useRef(false);
+
+  // 处理弹窗关闭
+  const handleOpenChange = (newOpen: boolean) => {
+    // 如果是关闭弹窗，并且有导入成功的标记，则刷新书签列表
+    if (!newOpen && importSuccessRef.current) {
+      // 重置标记
+      importSuccessRef.current = false;
+      // 发布事件
+      eventService.publish(EVENTS.BOOKMARKS_IMPORTED);
+    }
+    setOpen(newOpen);
+  };
+
+  // 监听导入成功事件
+  const handleImportSuccess = () => {
+    importSuccessRef.current = true;
+  };
+
+  // 使用useEffect管理事件订阅
+  useEffect(() => {
+    // 订阅导入成功事件
+    eventService.subscribe(EVENTS.BOOKMARKS_IMPORTED, handleImportSuccess);
+    
+    // 组件卸载时取消订阅
+    return () => {
+      eventService.unsubscribe(EVENTS.BOOKMARKS_IMPORTED, handleImportSuccess);
+    };
+  }, []);
 
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Dialog open={open} onOpenChange={setOpen}>
+          <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
               <Button 
                 variant="outline" 
