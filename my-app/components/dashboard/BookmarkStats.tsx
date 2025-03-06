@@ -175,12 +175,19 @@ export function BookmarkStats() {
       fetchBookmarkStats();
     };
     
+    const handleBookmarkDeleted = () => {
+      console.log('检测到书签删除事件，刷新书签统计');
+      fetchBookmarkStats();
+    };
+    
     // 订阅事件
     eventService.subscribe(EVENTS.BOOKMARKS_IMPORTED, handleBookmarksImported);
+    eventService.subscribe(EVENTS.BOOKMARK_DELETED, handleBookmarkDeleted);
     
     // 组件卸载时取消订阅
     return () => {
       eventService.unsubscribe(EVENTS.BOOKMARKS_IMPORTED, handleBookmarksImported);
+      eventService.unsubscribe(EVENTS.BOOKMARK_DELETED, handleBookmarkDeleted);
     };
   }, [fetchBookmarkStats]);
 

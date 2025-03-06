@@ -31,4 +31,5 @@ export const eventService = new EventService();
 // 定义事件名称常量
 export const EVENTS = {
   BOOKMARKS_IMPORTED: 'bookmarks_imported',
+  BOOKMARK_DELETED: 'bookmark_deleted',
 }; 

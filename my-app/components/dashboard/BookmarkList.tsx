@@ -149,6 +149,9 @@ export default function BookmarkList() {
       setBookmarks(updatedBookmarks);
       setFilteredBookmarks(updatedBookmarks);
       
+      // 发布书签删除成功事件
+      eventService.publish(EVENTS.BOOKMARK_DELETED);
+      
       toast({
         title: "书签已删除",
         description: "书签已成功从数据库中删除",
