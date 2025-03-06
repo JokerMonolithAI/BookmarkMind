@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { ExternalLink, Trash } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { useView } from './ViewToggle';
+import ImportButton from './ImportButton';
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -204,12 +205,7 @@ export default function BookmarkList() {
     return (
       <div className="py-16 text-center">
         <p className="text-gray-500 mb-4">您还没有添加任何书签</p>
-        <Button 
-          variant="outline"
-          className="h-10 px-4 py-2.5 border border-gray-200 rounded-md bg-white hover:bg-gray-50 text-gray-700 font-medium transition-colors duration-200"
-        >
-          导入书签
-        </Button>
+        <ImportButton />
       </div>
     );
   }

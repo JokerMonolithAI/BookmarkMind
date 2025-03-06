@@ -30,7 +30,7 @@ export default function ImportButton() {
                 className="h-10 px-3 py-2.5 border border-gray-200 rounded-md bg-white hover:bg-gray-50 text-gray-700 font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-200"
               >
                 <Import className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">导入</span>
+                <span className="hidden sm:inline">导入书签</span>
               </Button>
             </DialogTrigger>
             <DialogContent 
