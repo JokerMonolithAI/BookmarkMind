@@ -122,10 +122,7 @@ export default function BookmarkList() {
     try {
       setIsDeleting(true);
       
-      // 从数据库中删除书签 - 修复路径，添加额外的 bookmarks 层级
-      console.log(`尝试删除书签: ${id}`);
-      console.log(`删除路径: users/${user.uid}/bookmarks/bookmarks/${id}`);
-      
+      // 从数据库中删除书签 - 修复路径，添加额外的 bookmarks 层级      
       const bookmarkRef = ref(db, `users/${user.uid}/bookmarks/bookmarks/${id}`);
       
       // 检查书签是否存在
@@ -142,7 +139,6 @@ export default function BookmarkList() {
       
       // 执行删除操作
       await remove(bookmarkRef);
-      console.log(`书签已从数据库中删除: ${id}`);
       
       // 更新本地状态
       const updatedBookmarks = bookmarks.filter(bookmark => bookmark.id !== id);
@@ -200,7 +196,6 @@ export default function BookmarkList() {
   useEffect(() => {
     // 定义事件处理函数
     const handleBookmarksImported = () => {
-      console.log('检测到书签导入成功事件，刷新书签列表');
       fetchBookmarks();
     };
     

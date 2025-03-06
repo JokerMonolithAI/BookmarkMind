@@ -10,28 +10,20 @@ export async function parseBookmarkFile(file: File): Promise<{
   bookmarks: Bookmark[];
   duplicatesCount: number;
 }> {
-  // 添加日志
-  console.log(`开始解析书签文件: ${file.name}, 大小: ${file.size} 字节`);
-  
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     
     reader.onload = async (event) => {
       try {
-        console.log('文件读取完成，开始解析');
         const content = event.target?.result as string;
         
         // 根据文件类型选择解析方法
         let bookmarks: Bookmark[] = [];
         if (file.name.endsWith('.json')) {
-          console.log('解析 JSON 格式书签');
-          bookmarks = parseFirefoxBookmarks(content);
+          bookmarks = parseJsonBookmarks(content);
         } else {
-          console.log('解析 HTML 格式书签');
           bookmarks = parseHtmlBookmarks(content);
         }
-        
-        console.log(`解析完成，原始书签数量: ${bookmarks.length}`);
         
         // 去重处理
         const uniqueUrls = new Set<string>();
@@ -49,9 +41,7 @@ export async function parseBookmarkFile(file: File): Promise<{
             }
           }
         }
-        
-        console.log(`去重完成，去除了 ${duplicatesCount} 个重复书签，剩余 ${uniqueBookmarks.length} 个`);
-        
+                
         resolve({
           bookmarks: uniqueBookmarks,
           duplicatesCount

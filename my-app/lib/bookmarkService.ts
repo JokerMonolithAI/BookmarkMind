@@ -97,7 +97,6 @@ export async function saveUserBookmarks(
     
     // 使用 update 而不是 set
     await update(userBookmarksRef, { bookmarks: userData });
-    console.log('Bookmarks saved successfully');
     
     // 返回去重信息
     return {
@@ -120,7 +119,6 @@ export async function getUserBookmarks(userId: string): Promise<UserBookmarkData
     if (snapshot.exists()) {
       return snapshot.val() as UserBookmarkData;
     } else {
-      console.log('No bookmarks found for user');
       return null;
     }
   } catch (error) {
@@ -143,7 +141,6 @@ export async function updateBookmark(
     const lastUpdatedRef = ref(db, `users/${userId}/bookmarks/lastUpdated`);
     await set(lastUpdatedRef, Date.now());
     
-    console.log('Bookmark updated successfully');
   } catch (error) {
     console.error('Error updating bookmark:', error);
     throw error;
@@ -160,7 +157,6 @@ export async function deleteBookmark(userId: string, bookmarkId: string): Promis
     const lastUpdatedRef = ref(db, `users/${userId}/bookmarks/lastUpdated`);
     await set(lastUpdatedRef, Date.now());
     
-    console.log('Bookmark deleted successfully');
   } catch (error) {
     console.error('Error deleting bookmark:', error);
     throw error;

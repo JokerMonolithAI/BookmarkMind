@@ -60,31 +60,12 @@ export function BookmarkStats() {
         setTotalBookmarks(bookmarksArray.length);
         
         // 计算本周新增 - 更详细的调试
-        const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-        console.log('===== 本周新增书签计算 =====');
-        console.log('一周前的时间戳:', oneWeekAgo, '对应日期:', new Date(oneWeekAgo).toLocaleString());
-        console.log('当前时间戳:', Date.now(), '对应日期:', new Date().toLocaleString());
-        
-        // 输出所有书签的时间戳信息
-        console.log('所有书签的时间戳信息:');
-        bookmarksArray.forEach((bookmark, index) => {
-          if (index < 10) { // 只输出前10个，避免日志过多
-            console.log(`书签 ${index + 1}:`, {
-              id: bookmark.id,
-              title: bookmark.title,
-              createdAt: bookmark.createdAt,
-              addedAt: bookmark.addedAt,
-              createdAtType: typeof bookmark.createdAt,
-              addedAtType: typeof bookmark.addedAt
-            });
-          }
-        });
+        const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;        
         
         // 尝试一种更直接的方法 - 使用当前日期作为参考点
         const today = new Date();
         const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7);
-        console.log('周开始日期:', weekStart.toLocaleString(), '时间戳:', weekStart.getTime());
-        
+                
         // 使用两种方法计算
         const recentBookmarks1 = bookmarksArray.filter(bookmark => {
           // 修改：优先使用addedAt而不是createdAt
@@ -99,17 +80,7 @@ export function BookmarkStats() {
             : timeValue;
           
           const isRecent = normalizedTime > oneWeekAgo;
-          
-          // 如果是最近的书签，记录一下
-          if (isRecent) {
-            console.log('方法1找到最近的书签:', {
-              id: bookmark.id,
-              title: bookmark.title,
-              addedTime: normalizedTime,
-              formattedTime: new Date(normalizedTime).toLocaleString()
-            });
-          }
-          
+                    
           return normalizedTime > oneWeekAgo;
         });
         
@@ -129,24 +100,10 @@ export function BookmarkStats() {
           // 创建日期对象
           const bookmarkDate = new Date(normalizedTime);
           const isRecent = bookmarkDate > weekStart;
-          
-          // 如果是最近的书签，记录一下
-          if (isRecent) {
-            console.log('方法2找到最近的书签:', {
-              id: bookmark.id,
-              title: bookmark.title,
-              date: bookmarkDate.toLocaleString(),
-              weekStart: weekStart.toLocaleString()
-            });
-          }
-          
+                    
           return isRecent;
         });
-        
-        console.log(`方法1找到 ${recentBookmarks1.length} 个最近添加的书签`);
-        console.log(`方法2找到 ${recentBookmarks2.length} 个最近添加的书签`);
-        console.log('总共书签数量:', bookmarksArray.length);
-        
+                
         // 使用方法2的结果
         setNewThisWeek(recentBookmarks2.length);
       } else {
@@ -171,12 +128,10 @@ export function BookmarkStats() {
   useEffect(() => {
     // 定义事件处理函数
     const handleBookmarksImported = () => {
-      console.log('检测到书签导入成功事件，刷新书签统计');
       fetchBookmarkStats();
     };
     
     const handleBookmarkDeleted = () => {
-      console.log('检测到书签删除事件，刷新书签统计');
       fetchBookmarkStats();
     };
     

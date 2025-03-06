@@ -42,12 +42,9 @@ export default function BookmarkImport() {
 
   // 组件挂载/卸载处理
   useEffect(() => {
-    // 组件挂载时
-    console.log('BookmarkImport 组件已挂载');
-    
+   
     // 组件卸载时
     return () => {
-      console.log('BookmarkImport 组件将卸载，清理资源');
       isMountedRef.current = false;
       if (progressTimerRef.current) {
         clearTimeout(progressTimerRef.current);
@@ -58,7 +55,6 @@ export default function BookmarkImport() {
 
   // 简化的进度更新函数
   const updateProgress = (value: number) => {
-    console.log(`更新进度: ${value}%`);
     if (isMountedRef.current) {
       setImportProgress(value);
     }
@@ -67,7 +63,6 @@ export default function BookmarkImport() {
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      console.log(`选择了文件: ${file.name}, 大小: ${file.size} 字节`);
       setSelectedFile(file);
       setImportResult(null);
       
@@ -80,7 +75,6 @@ export default function BookmarkImport() {
   };
 
   const resetImport = () => {
-    console.log('重置导入状态');
     // 清除计时器
     if (progressTimerRef.current) {
       clearTimeout(progressTimerRef.current);
@@ -96,11 +90,9 @@ export default function BookmarkImport() {
 
   const handleFileUpload = async () => {
     if (!selectedFile || !user) {
-      console.log('没有选择文件或用户未登录');
       return;
     }
 
-    console.log('开始导入过程');
     setIsImporting(true);
     setImportResult(null);
 
@@ -112,20 +104,17 @@ export default function BookmarkImport() {
       }
       
       // 更新进度 - 解析开始
-      console.log('开始解析文件');
       updateProgress(20);
       
       // 1. 解析书签文件并获取去重信息
       console.time('parseBookmarkFile');
       const { bookmarks: parsedBookmarks, duplicatesCount: importDuplicates } = await parseBookmarkFile(selectedFile);
       console.timeEnd('parseBookmarkFile');
-      console.log(`解析完成，获取到 ${parsedBookmarks.length} 个书签，${importDuplicates} 个重复`);
       
       // 更新进度 - 解析完成
       updateProgress(40);
       
       // 2. 将去重后的书签转换为对象
-      console.log('转换书签格式');
       const bookmarksObject: Record<string, Bookmark> = {};
       parsedBookmarks.forEach(bookmark => {
         const id = bookmark.id || `bookmark_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -139,11 +128,9 @@ export default function BookmarkImport() {
       updateProgress(50);
       
       // 3. 与数据库中的书签对比去重并保存
-      console.log('开始保存到数据库');
       console.time('saveUserBookmarks');
       const result = await saveUserBookmarks(user.uid, bookmarksObject, {});
       console.timeEnd('saveUserBookmarks');
-      console.log(`保存完成，跳过了 ${result.dbDuplicates} 个重复，保存了 ${result.savedCount} 个书签`);
       
       // 更新进度 - 保存完成
       updateProgress(70);
@@ -151,7 +138,6 @@ export default function BookmarkImport() {
       // 4. 如果启用了分析，调用API分析书签
       let analyzedCount = 0;
       if (analyzeBookmarks && result.savedCount > 0) {
-        console.log('开始分析书签');
         updateProgress(75);
         
         try {
@@ -164,7 +150,6 @@ export default function BookmarkImport() {
             }));
           
           if (bookmarksToAnalyze.length > 0) {
-            console.log(`准备分析 ${bookmarksToAnalyze.length} 个书签`);
             
             // 调用批量分析API
             const analysisResult = await apiService.analyzeBatchBookmarks(
@@ -173,10 +158,8 @@ export default function BookmarkImport() {
             );
             
             analyzedCount = analysisResult.successCount;
-            console.log(`成功分析了 ${analyzedCount} 个书签`);
           }
         } catch (error) {
-          console.error('分析书签时出错:', error);
           // 分析失败不影响整体导入流程，继续执行
         }
       }
@@ -185,7 +168,6 @@ export default function BookmarkImport() {
       updateProgress(100);
       
       // 显示结果
-      console.log('导入成功，显示结果');
       setImportResult({
         success: true,
         message: '', // 移除重复的成功消息
@@ -202,7 +184,6 @@ export default function BookmarkImport() {
       // 这样可以确保文件信息区域保持隐藏
       
     } catch (error) {
-      console.error("导入错误", error);
       
       // 设置进度为0
       updateProgress(0);
@@ -216,7 +197,6 @@ export default function BookmarkImport() {
       setIsImporting(false);
       
     } finally {
-      console.log('导入过程结束');
       // 不在 finally 中设置 isImporting = false
       // 只在导入失败时设置
     }
