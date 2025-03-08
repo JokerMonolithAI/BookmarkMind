@@ -7,6 +7,7 @@
 - Next.js 14 (App Router)
 - Firebase Authentication（用户认证）
 - Firebase Realtime Database（实时数据库）
+- Firebase Storage（文件存储）
 - Tailwind CSS（样式框架）
 - Shadcn/ui（UI组件库）
 
@@ -37,6 +38,12 @@
   - [x] 摘要生成
   - [x] 关键词提取
   - [x] 标签建议
+- [x] 文档管理
+  - [x] 为书签上传PDF文档
+  - [x] 支持每个书签关联多个文档
+  - [x] 文档上传进度显示
+  - [x] 文档在线查看
+  - [x] 文档删除功能
 - [ ] 脑图生成与编辑
   - [ ] 自动生成脑图
   - [ ] 脑图编辑功能
@@ -68,6 +75,10 @@ my-app/
 ```
 
 ## 最近更新
+- 新增了书签PDF文档上传功能，支持为每个书签关联多个PDF文件
+- 实现了文档上传进度显示和文件管理功能
+- 优化了文件名处理，支持中文文件名安全上传
+- 配置了Firebase Storage的CORS设置，解决了跨域问题
 - 实现了书签的真实删除功能
 - 优化了书签列表的显示和分页
 - 添加了书签统计功能
@@ -130,7 +141,28 @@ NEXT_PUBLIC_FIREBASE_DATABASE_URL=你的数据库URL
 NEXT_PUBLIC_API_BASE_URL=你的API基础URL
 ```
 
-4. 启动开发服务器
+4. 配置 Firebase Storage CORS 设置
+为了支持文件上传功能，需要配置 Firebase Storage 的 CORS 设置：
+
+a. 使用 Google Cloud SDK（推荐）:
+```bash
+# 安装 Google Cloud SDK
+# 创建 cors.json 文件
+[
+  {
+    "origin": ["http://localhost:3000", "https://your-production-domain.com"],
+    "method": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    "maxAgeSeconds": 3600
+  }
+]
+
+# 应用 CORS 配置
+gsutil cors set cors.json gs://your-project-id.appspot.com
+```
+
+b. 或通过 Firebase 控制台手动配置 Storage 规则
+
+5. 启动开发服务器
 ```bash
 npm run dev
 ```
