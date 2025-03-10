@@ -7,9 +7,14 @@ import { Suspense } from 'react';
 import ImportButton from '@/components/dashboard/ImportButton';
 import { ViewToggle, ViewProvider, useView } from '@/components/dashboard/ViewToggle';
 import { SearchBar } from '@/components/dashboard/SearchBar';
-import { Loader2, Pencil, Trash2 } from 'lucide-react';
+import { Loader2, Pencil, Trash2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { mockApiService } from '@/lib/mockApiService';
+import SimpleMindMap from '@/components/mindmap/SimpleMindMap';
+import EnhancedMindMapWithProvider from '@/components/mindmap/EnhancedMindMap';
+import AnalysisProgress from '@/components/mindmap/AnalysisProgress';
+import { TaskStatus, MindMapData } from '@/types/mindmap';
 
 // 临时的分类数据，后续会从数据库获取
 const tempCategories = [
@@ -24,10 +29,25 @@ function MindMapContent() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
   const [categoryName, setCategoryName] = useState('');
+  const { user } = useAuth();
+  
+  // 分析状态
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [taskId, setTaskId] = useState<string | null>(null);
+  const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
+  const [pollCount, setPollCount] = useState(0);
+  const [mindMapData, setMindMapData] = useState<MindMapData | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // 处理分类点击
   const handleCategoryClick = (categoryId: string) => {
     setSelectedCategory(categoryId);
+    // 切换分类时重置脑图数据
+    setMindMapData(null);
+    setTaskStatus(null);
+    setTaskId(null);
+    setPollCount(0);
+    setError(null);
   };
 
   // 处理分类编辑
@@ -47,6 +67,81 @@ function MindMapContent() {
     // 这里将来会实现保存逻辑
     console.log('保存编辑:', editingCategory, categoryName);
     setEditingCategory(null);
+  };
+  
+  // 处理分析按钮点击
+  const handleAnalyzeClick = async () => {
+    if (!user) return;
+    
+    setIsAnalyzing(true);
+    setError(null);
+    setMindMapData(null);
+    setTaskStatus(null);
+    setPollCount(0);
+    
+    try {
+      // 启动分析任务
+      const startResult = await mockApiService.startAnalyzeTask(user.uid, selectedCategory);
+      setTaskId(startResult.taskId);
+      setTaskStatus(startResult);
+      
+      // 开始轮询任务状态
+      pollTaskStatus(startResult.taskId);
+    } catch (err) {
+      console.error('启动分析失败:', err);
+      setError(err instanceof Error ? err.message : '启动分析失败，请稍后重试');
+      setIsAnalyzing(false);
+    }
+  };
+  
+  // 轮询任务状态
+  const pollTaskStatus = async (taskId: string) => {
+    try {
+      // 更新轮询次数（使用函数式更新确保使用最新状态）
+      setPollCount(prevCount => {
+        const newPollCount = prevCount + 1;
+        
+        // 在状态更新的回调中执行后续逻辑
+        setTimeout(async () => {
+          try {
+            // 获取任务状态
+            const status = await mockApiService.getTaskStatus(taskId, newPollCount);
+            setTaskStatus(status);
+            
+            // 根据状态决定下一步操作
+            if (status.status === 'completed') {
+              // 任务完成，获取结果
+              const result = await mockApiService.getAnalysisResult(taskId, selectedCategory);
+              setMindMapData(result);
+              setIsAnalyzing(false);
+            } else if (status.status === 'failed') {
+              // 任务失败
+              setError(status.error || '分析失败，请稍后重试');
+              setIsAnalyzing(false);
+            } else if (status.status === 'processing') {
+              // 任务处理中，继续轮询
+              pollTaskStatus(taskId);
+            }
+          } catch (err) {
+            console.error('轮询任务状态失败:', err);
+            setError(err instanceof Error ? err.message : '获取分析状态失败，请稍后重试');
+            setIsAnalyzing(false);
+          }
+        }, 1500);
+        
+        return newPollCount;
+      });
+    } catch (err) {
+      console.error('轮询任务状态失败:', err);
+      setError(err instanceof Error ? err.message : '获取分析状态失败，请稍后重试');
+      setIsAnalyzing(false);
+    }
+  };
+  
+  // 重试分析
+  const handleRetry = () => {
+    setError(null);
+    handleAnalyzeClick();
   };
 
   return (
@@ -145,14 +240,58 @@ function MindMapContent() {
 
         {/* 右侧脑图区域 - 扩大区域 */}
         <div className="flex-1 p-4">
-          <h2 className="text-xl font-medium mb-4">
-            {selectedCategory === 'all' 
-              ? '我的脑图' 
-              : tempCategories.find(c => c.id === selectedCategory)?.name || ''}
-          </h2>
-          <div className="h-[calc(100vh-120px)] border border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center text-gray-500">
-            <div>此区域为脑图全部区域</div>
-            <div className="mt-2">思维导图视图开发中...</div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-medium">
+              {selectedCategory === 'all' 
+                ? '我的脑图' 
+                : tempCategories.find(c => c.id === selectedCategory)?.name || ''}
+            </h2>
+            
+            {/* 添加"开始分析"按钮 */}
+            <Button 
+              onClick={handleAnalyzeClick} 
+              disabled={isAnalyzing}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {isAnalyzing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  分析中...
+                </>
+              ) : (
+                '开始分析'
+              )}
+            </Button>
+          </div>
+          
+          {/* 脑图展示区域 */}
+          <div className="h-[calc(100vh-120px)] border border-gray-200 rounded-lg flex flex-col items-center justify-center">
+            {isAnalyzing && taskStatus ? (
+              <div className="p-8">
+                <AnalysisProgress status={taskStatus} />
+              </div>
+            ) : error ? (
+              <div className="text-center text-red-500 p-8">
+                <AlertCircle className="h-12 w-12 mx-auto mb-2" />
+                <p className="mb-4">{error}</p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleRetry}
+                >
+                  重试
+                </Button>
+              </div>
+            ) : mindMapData ? (
+              <div className="h-full w-full">
+                <EnhancedMindMapWithProvider data={mindMapData} />
+              </div>
+            ) : (
+              <div className="text-center text-gray-500">
+                <div>此区域为脑图全部区域</div>
+                <div className="mt-2">点击"开始分析"按钮生成脑图</div>
+              </div>
+            )}
           </div>
         </div>
       </div>

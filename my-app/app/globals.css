@@ -65,3 +65,140 @@ body {
   transition-duration: 300ms;
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* React Flow 样式 */
+.react-flow__node {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  z-index: 10 !important;
+}
+
+.react-flow__node:hover {
+  transform: scale(1.05);
+  z-index: 20 !important;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* 边样式 */
+.react-flow__edge {
+  z-index: 5 !important;
+  pointer-events: all !important;
+}
+
+.react-flow__edge path {
+  transition: stroke-width 0.3s ease, opacity 0.3s ease, filter 0.3s ease;
+  stroke-width: 0.75px !important;
+}
+
+.react-flow__edge:hover path {
+  stroke-width: 1.25px !important;
+  opacity: 1 !important;
+}
+
+.edge-glow {
+  z-index: 4 !important;
+}
+
+/* 确保边的颜色不被覆盖 */
+.react-flow__edge-path {
+  stroke-width: 0.75px !important;
+}
+
+/* 控制面板样式 */
+.react-flow__controls {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.react-flow__controls button {
+  border-radius: 0;
+  background-color: white;
+  border: 1px solid #f0f0f0;
+  color: #374151;
+  width: 24px;
+  height: 24px;
+  padding: 2px;
+}
+
+.react-flow__controls button:hover {
+  background-color: #f9fafb;
+}
+
+/* 节点类型样式 */
+.react-flow__node-centerNode {
+  font-weight: bold;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.react-flow__node-centerNode:hover {
+  transform: scale(1.03);
+  z-index: 10;
+}
+
+.react-flow__node-centerNode:hover > div {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2) !important;
+}
+
+.react-flow__node-branchNode {
+  font-weight: 500;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.react-flow__node-branchNode:hover {
+  transform: scale(1.02);
+  z-index: 10;
+}
+
+.react-flow__node-branchNode:hover > div {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+.react-flow__node-topicNode {
+  font-weight: normal;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.react-flow__node-topicNode:hover {
+  transform: translateY(-2px);
+  z-index: 10;
+}
+
+.react-flow__node-topicNode:hover > div {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* 调试面板 */
+.debug-panel {
+  background-color: rgba(255, 255, 255, 0.9);
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #eee;
+  z-index: 10;
+  font-size: 11px !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* 背景样式 */
+.react-flow__background {
+  opacity: 0.5;
+}
+
+/* 详情节点样式 */
+.react-flow__node-detailNode {
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.react-flow__node-detailNode:hover {
+  transform: translateY(-2px);
+  z-index: 10;
+}
+
+.react-flow__node-detailNode:hover > div {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+.detail-node a:hover {
+  text-decoration: underline !important;
+}
