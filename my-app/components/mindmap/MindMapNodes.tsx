@@ -50,6 +50,7 @@ export function CenterNode({ data }: NodeProps) {
           borderColor: colorSchemes.center.border,
           color: colorSchemes.center.text,
           minWidth: '120px',
+          maxWidth: '300px', // 增加最大宽度，防止文字过长导致节点过宽
           fontSize: '16px',
           fontWeight: 'bold',
           boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
@@ -58,17 +59,32 @@ export function CenterNode({ data }: NodeProps) {
           cursor: 'pointer', // 添加指针样式，表示可点击
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center'
+          alignItems: 'center',
+          position: 'relative', // 确保连接点相对于节点定位
+          zIndex: 1 // 确保节点在连线上方
         }}
         onClick={toggleCollapse}
       >
-        <div className="font-bold text-lg">{data.label}</div>
+        <div 
+          className="font-bold text-lg"
+          style={{
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap', // 文字过长时不换行，使用省略号
+            flexGrow: 1, // 允许文字区域占据剩余空间
+            textAlign: 'center' // 中心节点文字居中对齐
+          }}
+          title={data.label} // 添加title属性，鼠标悬停时显示完整文字
+        >
+          {data.label}
+        </div>
         <span 
           style={{ 
             marginLeft: '8px', 
             fontSize: '14px',
             color: colorSchemes.center.border,
-            fontWeight: 'bold'
+            fontWeight: 'bold',
+            flexShrink: 0 // 防止折叠/展开图标被压缩
           }}
         >
           {isCollapsed ? '▶' : '▼'}
@@ -86,7 +102,8 @@ export function CenterNode({ data }: NodeProps) {
           height: '10px',
           top: '50%',
           left: 0,
-          transform: 'translateY(-50%)'
+          transform: 'translateY(-50%)',
+          zIndex: 2 // 确保连接点在最上层
         }} 
       />
       <Handle 
@@ -99,7 +116,8 @@ export function CenterNode({ data }: NodeProps) {
           height: '10px',
           top: '50%',
           right: 0,
-          transform: 'translateY(-50%)'
+          transform: 'translateY(-50%)',
+          zIndex: 2 // 确保连接点在最上层
         }} 
       />
     </>
@@ -144,6 +162,7 @@ export function BranchNode({ data }: NodeProps) {
           borderColor: colors.border,
           color: colors.text,
           minWidth: '100px',
+          maxWidth: '250px', // 增加最大宽度，防止文字过长导致节点过宽
           fontSize: '14px',
           fontWeight: '500',
           boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
@@ -152,17 +171,32 @@ export function BranchNode({ data }: NodeProps) {
           cursor: 'pointer', // 添加指针样式，表示可点击
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center'
+          alignItems: 'center',
+          position: 'relative', // 确保连接点相对于节点定位
+          zIndex: 1 // 确保节点在连线上方
         }}
         onClick={toggleCollapse}
       >
-        <div className="font-medium">{data.label}</div>
+        <div 
+          className="font-medium"
+          style={{
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap', // 文字过长时不换行，使用省略号
+            flexGrow: 1, // 允许文字区域占据剩余空间
+            textAlign: 'left' // 文字左对齐
+          }}
+          title={data.label} // 添加title属性，鼠标悬停时显示完整文字
+        >
+          {data.label}
+        </div>
         <span 
           style={{ 
             marginLeft: '8px', 
             fontSize: '12px',
             color: colors.border,
-            fontWeight: 'bold'
+            fontWeight: 'bold',
+            flexShrink: 0 // 防止折叠/展开图标被压缩
           }}
         >
           {isCollapsed ? '▶' : '▼'}
@@ -180,7 +214,8 @@ export function BranchNode({ data }: NodeProps) {
           height: '10px',
           top: '50%',
           left: 0,
-          transform: 'translateY(-50%)'
+          transform: 'translateY(-50%)',
+          zIndex: 2 // 确保连接点在最上层
         }} 
       />
       <Handle 
@@ -193,7 +228,8 @@ export function BranchNode({ data }: NodeProps) {
           height: '10px',
           top: '50%',
           right: 0,
-          transform: 'translateY(-50%)'
+          transform: 'translateY(-50%)',
+          zIndex: 2
         }} 
       />
       <Handle 
@@ -206,7 +242,8 @@ export function BranchNode({ data }: NodeProps) {
           height: '10px',
           top: '50%',
           left: 0,
-          transform: 'translateY(-50%)'
+          transform: 'translateY(-50%)',
+          zIndex: 2
         }} 
       />
       <Handle 
@@ -219,7 +256,8 @@ export function BranchNode({ data }: NodeProps) {
           height: '10px',
           top: '50%',
           right: 0,
-          transform: 'translateY(-50%)'
+          transform: 'translateY(-50%)',
+          zIndex: 2
         }} 
       />
     </>
@@ -260,7 +298,7 @@ export function TopicNode({ data }: NodeProps) {
         style={{
           color: colors.text,
           minWidth: '120px',
-          maxWidth: '180px',
+          maxWidth: '200px', // 增加最大宽度，防止文字过长导致节点过宽
           borderWidth: '1px',
           borderStyle: 'solid',
           borderColor: colors.border,
@@ -270,25 +308,35 @@ export function TopicNode({ data }: NodeProps) {
           padding: '8px 12px',
           boxShadow: '0 1px 2px rgba(0, 0, 0, 0.1)',
           transition: 'all 0.2s ease',
-          textAlign: 'center',
           fontWeight: '500',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
           cursor: 'pointer',
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center'
+          alignItems: 'center',
+          position: 'relative', // 确保连接点相对于节点定位
+          zIndex: 1 // 确保节点在连线上方
         }}
         onClick={toggleCollapse}
       >
-        <span>{data.label}</span>
+        <span 
+          style={{
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap', // 文字过长时不换行，使用省略号
+            flexGrow: 1, // 允许文字区域占据剩余空间
+            textAlign: 'left' // 文字左对齐
+          }}
+          title={data.label} // 添加title属性，鼠标悬停时显示完整文字
+        >
+          {data.label}
+        </span>
         <span 
           style={{ 
             marginLeft: '8px', 
             fontSize: '12px',
             color: colors.border,
-            fontWeight: 'bold'
+            fontWeight: 'bold',
+            flexShrink: 0 // 防止折叠/展开图标被压缩
           }}
         >
           {isCollapsed ? '▶' : '▼'}
@@ -306,7 +354,8 @@ export function TopicNode({ data }: NodeProps) {
           height: '10px',
           top: '50%',
           left: 0,
-          transform: 'translateY(-50%)'
+          transform: 'translateY(-50%)',
+          zIndex: 2 // 确保连接点在最上层
         }} 
       />
       <Handle 
@@ -319,7 +368,8 @@ export function TopicNode({ data }: NodeProps) {
           height: '10px',
           top: '50%',
           right: 0,
-          transform: 'translateY(-50%)'
+          transform: 'translateY(-50%)',
+          zIndex: 2 // 确保连接点在最上层
         }} 
       />
     </>
@@ -447,7 +497,8 @@ export function DetailNode({ data }: NodeProps) {
             height: '10px',
             top: '50%',
             left: 0,
-            transform: 'translateY(-50%)'
+            transform: 'translateY(-50%)',
+            zIndex: 2 // 确保连接点在最上层
           }} 
         />
       </>
@@ -477,6 +528,7 @@ export function DetailNode({ data }: NodeProps) {
           display: 'grid',
           gridTemplateRows,
           rowGap: '4px',
+          zIndex: 1 // 确保节点在连线上方
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -557,7 +609,8 @@ export function DetailNode({ data }: NodeProps) {
           height: '10px',
           top: '50%',
           left: 0,
-          transform: 'translateY(-50%)'
+          transform: 'translateY(-50%)',
+          zIndex: 2 // 确保连接点在最上层
         }} 
       />
     </>
@@ -582,6 +635,8 @@ export function FileNode({ data }: NodeProps) {
           padding: '4px 8px',
           transition: 'all 0.2s ease',
           display: 'none', // 隐藏文件内容
+          position: 'relative',
+          zIndex: 1 // 确保节点在连线上方
         }}
       >
         <div style={{ 
@@ -608,7 +663,8 @@ export function FileNode({ data }: NodeProps) {
           height: '10px',
           top: '50%',
           left: 0,
-          transform: 'translateY(-50%)'
+          transform: 'translateY(-50%)',
+          zIndex: 2 // 确保连接点在最上层
         }} 
       />
     </>

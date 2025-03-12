@@ -233,8 +233,12 @@ function EnhancedMindMap({ data }: EnhancedMindMapProps) {
       const topicX = topicNode.position.x;
       const topicY = topicNode.position.y;
       
+      // 根据主题节点文本长度动态调整详情节点到主题的距离
+      const topicLabelLength = topicNode.data.label?.length || 0;
+      const estimatedTopicWidth = Math.max(120, topicLabelLength * 8 + 40); // 加40px作为padding和折叠图标的空间
+      
       // 详情节点的基础位置 - 所有详情节点在子主题节点右侧
-      const detailBaseX = topicX + 180;
+      const detailBaseX = topicX + Math.max(180, estimatedTopicWidth / 2 + 50); // 确保至少有50px的间距
       
       // 详情节点的垂直间距
       const detailVerticalSpacing = 60;

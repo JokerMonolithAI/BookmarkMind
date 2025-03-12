@@ -110,8 +110,13 @@ export function transformToReactFlowFormat(data: MindMapData): { nodes: Node[], 
     const branchX = rfBranchNode.position.x;
     const branchY = rfBranchNode.position.y;
     
-    // 子主题到分支的距离
-    const topicDistance = 150; // 子主题节点到分支节点的水平距离
+    // 根据分支节点文本长度动态调整子主题到分支的距离
+    // 估算文本宽度 (每个字符约10px，最小宽度为150px)
+    const branchLabelLength = branchNode.data.label?.length || 0;
+    const estimatedBranchWidth = Math.max(150, branchLabelLength * 10 + 40); // 加40px作为padding和折叠图标的空间
+    
+    // 子主题到分支的距离 - 根据分支节点文本长度动态调整
+    const topicDistance = Math.max(150, estimatedBranchWidth / 2 + 50); // 确保至少有50px的间距
     
     // 子主题之间的间距 - 根据子主题数量动态调整
     const topicSpacing = Math.max(40, Math.min(50, 200 / Math.max(1, topicCount))); // 动态调整间距
@@ -147,8 +152,12 @@ export function transformToReactFlowFormat(data: MindMapData): { nodes: Node[], 
         node => node.type === 'fileNode' && node.data.parentId === topic.id
       );
 
+      // 根据主题节点文本长度动态调整详情节点到主题的距离
+      const topicLabelLength = topic.data.label?.length || 0;
+      const estimatedTopicWidth = Math.max(120, topicLabelLength * 8 + 40); // 加40px作为padding和折叠图标的空间
+      
       // 详情节点的基础位置 - 所有详情节点在子主题节点右侧
-      const detailBaseX = x + 180;
+      const detailBaseX = x + Math.max(180, estimatedTopicWidth / 2 + 50); // 确保至少有50px的间距
       
       // 详情节点的垂直间距
       const detailVerticalSpacing = 60; // 详情节点之间的垂直间距
