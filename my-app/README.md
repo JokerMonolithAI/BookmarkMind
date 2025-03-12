@@ -215,3 +215,29 @@ type 类型：
 
 ## 许可证
 [MIT](https://opensource.org/licenses/MIT)
+
+## 脑图功能
+
+BookmarkMind 使用 [markmap](https://markmap.js.org/) 库来生成美观、高效的思维导图。markmap 是一个将 Markdown 转换为思维导图的库，具有以下特点：
+
+1. **高性能**：markmap 使用 SVG 渲染，性能优异，即使处理大型思维导图也能保持流畅
+2. **美观**：自动布局算法确保思维导图布局合理、美观
+3. **交互性**：支持折叠/展开节点、缩放、拖动等交互操作
+4. **易于定制**：支持自定义样式、颜色和布局
+
+### 实现方式
+
+我们的脑图功能主要包含以下组件：
+
+1. **MarkMap.tsx**：核心组件，负责将 Markdown 渲染为思维导图
+2. **MarkMapWithProvider.tsx**：包装组件，处理数据转换和状态管理
+3. **mindmapToMarkdown.ts**：工具函数，将 API 响应数据转换为 Markdown 格式
+4. **transformApiResponse.ts**：工具函数，将 API 响应数据转换为节点和边的格式
+
+### 数据流
+
+1. 用户点击"开始分析"按钮
+2. 后端 API 返回书签分析结果
+3. `transformApiResponseToMindMapData` 函数将 API 响应转换为节点和边的格式
+4. `convertNodesAndEdgesToMarkdown` 函数将节点和边转换为 Markdown 格式
+5. `MarkMap` 组件将 Markdown 渲染为思维导图

@@ -63,6 +63,7 @@ export interface MindMapAnalysisResponse {
   success: boolean;
   taskId?: string;
   results?: any;
+  markdown?: string;
   error?: {
     code: string;
     message: string;
@@ -224,7 +225,7 @@ class ApiService {
     }
   }
   
-  async getAnalysisResult(taskId: string): Promise<any> {
+  async getAnalysisResult(taskId: string): Promise<MindMapAnalysisResponse> {
     try {
       const headers = await this.getAuthHeaders();
       
@@ -233,7 +234,7 @@ class ApiService {
         headers
       });
       
-      return this.handleResponse<any>(response);
+      return this.handleResponse<MindMapAnalysisResponse>(response);
     } catch (error) {
       console.error("获取分析结果失败:", error);
       throw error;
