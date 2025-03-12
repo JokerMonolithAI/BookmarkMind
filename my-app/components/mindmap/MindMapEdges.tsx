@@ -16,7 +16,7 @@ const branchColors = {
 
 // 连接中心到分支主题的边
 export function BranchEdge({ id, source, target, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style = {}, data }: EdgeProps) {
-  // 使用贝塞尔曲线
+  // 使用贝塞尔曲线，增加曲线的控制点距离，使曲线更加平滑
   const [edgePath] = getBezierPath({
     sourceX,
     sourceY,
@@ -24,63 +24,12 @@ export function BranchEdge({ id, source, target, sourceX, sourceY, targetX, targ
     targetX,
     targetY,
     targetPosition,
+    curvature: 0.8, // 增加曲率
   });
 
   // 获取分支颜色
   const branchIndex = data?.branchIndex || 'default';
   const color = branchColors[branchIndex as keyof typeof branchColors] || branchColors.default;
-  
-  console.log('BranchEdge branchIndex:', branchIndex, 'color:', color, 'style:', style);
-
-  return (
-    <>
-      {/* 发光效果 */}
-      <path
-        id={`${id}-glow`}
-        className="edge-glow"
-        d={edgePath}
-        fill="none"
-        stroke={color}
-        strokeOpacity={0.2}
-        strokeWidth={2.5}
-        filter="blur(5px)"
-      />
-      {/* 主线 */}
-      <path
-        id={id}
-        d={edgePath}
-        fill="none"
-        stroke={color}
-        strokeWidth={0.75}
-        strokeLinecap="round"
-        style={{
-          ...style,
-          stroke: color, // 强制设置颜色
-          transition: 'stroke-width 0.3s ease, opacity 0.3s ease',
-        }}
-        className="react-flow__edge-path"
-      />
-    </>
-  );
-}
-
-// 连接分支主题到子主题的边
-export function TopicEdge({ id, source, target, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style = {}, data }: EdgeProps) {
-  // 使用贝塞尔曲线
-  const [edgePath] = getBezierPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-  });
-
-  // 获取分支颜色
-  const branchIndex = data?.branchIndex || 'default';
-  const color = branchColors[branchIndex as keyof typeof branchColors] || branchColors.default;
-  
-  console.log('TopicEdge branchIndex:', branchIndex, 'color:', color, 'style:', style);
 
   return (
     <path
@@ -88,7 +37,42 @@ export function TopicEdge({ id, source, target, sourceX, sourceY, targetX, targe
       d={edgePath}
       fill="none"
       stroke={color}
-      strokeWidth={0.5}
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      style={{
+        ...style,
+        stroke: color, // 强制设置颜色
+        transition: 'stroke-width 0.3s ease, opacity 0.3s ease',
+      }}
+      className="react-flow__edge-path"
+    />
+  );
+}
+
+// 连接分支主题到子主题的边
+export function TopicEdge({ id, source, target, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style = {}, data }: EdgeProps) {
+  // 使用贝塞尔曲线，增加曲线的控制点距离，使曲线更加平滑
+  const [edgePath] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+    curvature: 0.7, // 增加曲率
+  });
+
+  // 获取分支颜色
+  const branchIndex = data?.branchIndex || 'default';
+  const color = branchColors[branchIndex as keyof typeof branchColors] || branchColors.default;
+
+  return (
+    <path
+      id={id}
+      d={edgePath}
+      fill="none"
+      stroke={color}
+      strokeWidth={1}
       strokeLinecap="round"
       style={{
         ...style,
@@ -102,7 +86,7 @@ export function TopicEdge({ id, source, target, sourceX, sourceY, targetX, targe
 
 // 连接子主题到详情节点的边
 export function DetailEdge({ id, source, target, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style = {}, data }: EdgeProps) {
-  // 使用贝塞尔曲线
+  // 使用贝塞尔曲线，增加曲线的控制点距离，使曲线更加平滑
   const [edgePath] = getBezierPath({
     sourceX,
     sourceY,
@@ -110,13 +94,12 @@ export function DetailEdge({ id, source, target, sourceX, sourceY, targetX, targ
     targetX,
     targetY,
     targetPosition,
+    curvature: 0.6, // 增加曲率
   });
 
   // 获取分支颜色
   const branchIndex = data?.branchIndex || 'default';
   const color = branchColors[branchIndex as keyof typeof branchColors] || branchColors.default;
-  
-  console.log('DetailEdge branchIndex:', branchIndex, 'color:', color, 'style:', style);
 
   return (
     <path
@@ -124,7 +107,7 @@ export function DetailEdge({ id, source, target, sourceX, sourceY, targetX, targ
       d={edgePath}
       fill="none"
       stroke={color}
-      strokeWidth={0.5}
+      strokeWidth={0.8}
       strokeDasharray="3 2"
       strokeLinecap="round"
       style={{

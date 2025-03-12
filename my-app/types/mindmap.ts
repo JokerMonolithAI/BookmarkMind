@@ -18,6 +18,10 @@ export interface MindMapNode {
     title?: string;  // 详情节点的主题
     summary?: string;  // 详情节点的总结
     parentId?: string;  // 父节点ID，用于关联
+    content?: string;  // 结构化节点的内容
+    isStructured?: boolean;  // 是否为结构化节点
+    structureType?: 'url' | 'title' | 'summary';  // 结构化节点类型
+    file?: string;  // 文件名
   };
   position: {
     x: number;

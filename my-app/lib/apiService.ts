@@ -49,6 +49,27 @@ export interface BatchAnalysisResponse {
   failureCount: number;
 }
 
+// 定义任务状态接口
+export interface TaskStatus {
+  taskId: string;
+  status: 'processing' | 'completed' | 'failed';
+  progress: number;
+  stage: string;
+  error?: string;
+}
+
+// 定义脑图分析响应接口
+export interface MindMapAnalysisResponse {
+  success: boolean;
+  taskId?: string;
+  results?: any;
+  error?: {
+    code: string;
+    message: string;
+    details?: string;
+  };
+}
+
 class ApiService {
   private baseUrl: string;
   
@@ -154,6 +175,67 @@ class ApiService {
       return this.handleResponse<BatchAnalysisResponse>(response);
     } catch (error) {
       console.error("批量分析书签失败:", error);
+      throw error;
+    }
+  }
+
+  async analyzeBookmarks(
+    category: string,
+    bookmarkId?: string
+  ): Promise<MindMapAnalysisResponse> {
+    try {
+      const headers = await this.getAuthHeaders();
+      const user = auth.currentUser;
+      
+      if (!user) {
+        throw new Error("用户未登录");
+      }
+      
+      const response = await fetch(`${this.baseUrl}/bookmark/analyze-bookmarks`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          userId: user.uid,
+          category: category,
+          id: bookmarkId || null
+        })
+      });
+      
+      return this.handleResponse<MindMapAnalysisResponse>(response);
+    } catch (error) {
+      console.error("分析书签失败:", error);
+      throw error;
+    }
+  }
+  
+  async getTaskStatus(taskId: string): Promise<TaskStatus> {
+    try {
+      const headers = await this.getAuthHeaders();
+      
+      const response = await fetch(`${this.baseUrl}/v1/task/${taskId}/status`, {
+        method: "GET",
+        headers
+      });
+      
+      return this.handleResponse<TaskStatus>(response);
+    } catch (error) {
+      console.error("获取任务状态失败:", error);
+      throw error;
+    }
+  }
+  
+  async getAnalysisResult(taskId: string): Promise<any> {
+    try {
+      const headers = await this.getAuthHeaders();
+      
+      const response = await fetch(`${this.baseUrl}/v1/task/${taskId}/result`, {
+        method: "GET",
+        headers
+      });
+      
+      return this.handleResponse<any>(response);
+    } catch (error) {
+      console.error("获取分析结果失败:", error);
       throw error;
     }
   }

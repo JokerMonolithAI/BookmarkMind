@@ -10,11 +10,11 @@ import { SearchBar } from '@/components/dashboard/SearchBar';
 import { Loader2, Pencil, Trash2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { mockApiService } from '@/lib/mockApiService';
+import { apiService } from '@/lib/apiService';
 import SimpleMindMap from '@/components/mindmap/SimpleMindMap';
 import EnhancedMindMapWithProvider from '@/components/mindmap/EnhancedMindMap';
 import AnalysisProgress from '@/components/mindmap/AnalysisProgress';
-import { TaskStatus, MindMapData } from '@/types/mindmap';
+import { TaskStatus, MindMapData, MindMapNode, MindMapEdge } from '@/types/mindmap';
 
 // 临时的分类数据，后续会从数据库获取
 const tempCategories = [
@@ -80,13 +80,38 @@ function MindMapContent() {
     setPollCount(0);
     
     try {
-      // 启动分析任务
-      const startResult = await mockApiService.startAnalyzeTask(user.uid, selectedCategory);
-      setTaskId(startResult.taskId);
-      setTaskStatus(startResult);
+      // 获取当前选择的分类名称
+      const categoryName = selectedCategory === 'all' 
+        ? '书签脑图' // 使用"书签脑图"作为默认分类名称，与后端匹配
+        : tempCategories.find(c => c.id === selectedCategory)?.name || '书签脑图';
       
-      // 开始轮询任务状态
-      pollTaskStatus(startResult.taskId);
+      console.log(`开始分析分类: ${categoryName}`);
+      
+      // 使用真实API启动分析任务
+      const response = await apiService.analyzeBookmarks(categoryName);
+      
+      if (response.taskId) {
+        setTaskId(response.taskId);
+        // 创建初始任务状态
+        const initialStatus: TaskStatus = {
+          taskId: response.taskId,
+          status: 'processing',
+          progress: 10,
+          stage: 'initializing'
+        };
+        setTaskStatus(initialStatus);
+        
+        // 开始轮询任务状态
+        pollTaskStatus(response.taskId);
+      } else if (response.results) {
+        // 如果直接返回结果，无需轮询
+        console.log('直接获取到分析结果:', response.results);
+        const transformedData = transformApiResponseToMindMapData(response);
+        setMindMapData(transformedData);
+        setIsAnalyzing(false);
+      } else {
+        throw new Error('分析任务启动失败');
+      }
     } catch (err) {
       console.error('启动分析失败:', err);
       setError(err instanceof Error ? err.message : '启动分析失败，请稍后重试');
@@ -105,21 +130,37 @@ function MindMapContent() {
         setTimeout(async () => {
           try {
             // 获取任务状态
-            const status = await mockApiService.getTaskStatus(taskId, newPollCount);
+            const status = await apiService.getTaskStatus(taskId);
             setTaskStatus(status);
             
             // 根据状态决定下一步操作
             if (status.status === 'completed') {
               // 任务完成，获取结果
-              const result = await mockApiService.getAnalysisResult(taskId, selectedCategory);
-              setMindMapData(result);
+              console.log('任务完成，获取分析结果');
+              const result = await apiService.getAnalysisResult(taskId);
+              console.log('获取到分析结果:', result);
+              
+              // 确保结果格式正确
+              if (result && (result.results || result.data)) {
+                const dataToTransform = {
+                  success: true,
+                  results: result.results || result.data || {}
+                };
+                const transformedData = transformApiResponseToMindMapData(dataToTransform);
+                setMindMapData(transformedData);
+              } else {
+                console.error('分析结果格式不正确:', result);
+                setError('分析结果格式不正确，请重试');
+              }
               setIsAnalyzing(false);
             } else if (status.status === 'failed') {
               // 任务失败
+              console.error('分析任务失败:', status.error);
               setError(status.error || '分析失败，请稍后重试');
               setIsAnalyzing(false);
             } else if (status.status === 'processing') {
               // 任务处理中，继续轮询
+              console.log(`任务处理中，进度: ${status.progress}%, 阶段: ${status.stage}`);
               pollTaskStatus(taskId);
             }
           } catch (err) {
@@ -136,6 +177,396 @@ function MindMapContent() {
       setError(err instanceof Error ? err.message : '获取分析状态失败，请稍后重试');
       setIsAnalyzing(false);
     }
+  };
+  
+  // 将API响应转换为MindMapData格式
+  const transformApiResponseToMindMapData = (apiResponse: any): MindMapData => {
+    const nodes: MindMapNode[] = [];
+    const edges: MindMapEdge[] = [];
+    
+    // 创建中心节点
+    const centerNodeId = 'center';
+    nodes.push({
+      id: centerNodeId,
+      type: 'centerNode',
+      data: {
+        label: '我的脑图',
+      },
+      position: { x: 0, y: 0 }
+    });
+    
+    // 获取主要分类数据
+    // 查找主要分类键（可能是"书签脑图"或"我的脑图"等）
+    const mainCategoryKey = Object.keys(apiResponse.results || {})[0] || '';
+    if (!mainCategoryKey) return { nodes, edges };
+    
+    // 处理主要分类数据
+    const categoryData = apiResponse.results[mainCategoryKey] || [];
+    
+    // 过滤掉详情数据（通常是以_details结尾的键）
+    const mainCategories = categoryData.filter((item: any) => {
+      const key = Object.keys(item)[0] || '';
+      return !key.endsWith('_details') && !key.startsWith('file_');
+    });
+    
+    // 处理主要分类
+    mainCategories.forEach((categoryItem: any, categoryIndex: number) => {
+      // 获取分类名称（对象的第一个键）
+      const categoryName = Object.keys(categoryItem)[0];
+      
+      if (!categoryName) return;
+      
+      // 计算分支节点的角度和距离
+      const angle = (2 * Math.PI * categoryIndex) / mainCategories.length;
+      const branchDistance = 200;
+      
+      // 创建分支节点
+      const branchNodeId = `branch-${categoryIndex}`;
+      nodes.push({
+        id: branchNodeId,
+        type: 'branchNode',
+        data: {
+          label: categoryName,
+          branchIndex: categoryIndex
+        },
+        position: { 
+          x: Math.cos(angle) * branchDistance, 
+          y: Math.sin(angle) * branchDistance 
+        }
+      });
+      
+      // 连接中心节点和分支节点
+      edges.push({
+        id: `edge-center-to-${branchNodeId}`,
+        source: centerNodeId,
+        target: branchNodeId,
+        type: 'branchEdge',
+        data: {
+          branchIndex: categoryIndex
+        }
+      });
+      
+      // 处理主题
+      const topics = categoryItem[categoryName] || [];
+      topics.forEach((topicItem: any, topicIndex: number) => {
+        // 获取主题名称（对象的第一个键）
+        const topicName = Object.keys(topicItem)[0];
+        
+        if (!topicName) return;
+        
+        // 主题数据
+        const topicData = topicItem[topicName];
+        
+        // 计算主题节点的位置
+        const topicDistance = 400;
+        const topicX = Math.cos(angle) * topicDistance + (topicIndex % 2) * 50;
+        const topicY = Math.sin(angle) * topicDistance + Math.floor(topicIndex / 2) * 100;
+        
+        // 创建主题节点
+        const topicNodeId = `topic-${categoryIndex}-${topicIndex}`;
+        nodes.push({
+          id: topicNodeId,
+          type: 'topicNode',
+          data: {
+            label: topicName,
+            branchIndex: categoryIndex
+          },
+          position: { x: topicX, y: topicY }
+        });
+        
+        // 连接分支节点和主题节点
+        edges.push({
+          id: `edge-${branchNodeId}-to-${topicNodeId}`,
+          source: branchNodeId,
+          target: topicNodeId,
+          type: 'topicEdge',
+          data: {
+            branchIndex: categoryIndex
+          }
+        });
+        
+        // 计算详情节点的基础位置
+        const detailDistance = 600;
+        const detailBaseX = Math.cos(angle) * detailDistance + (topicIndex % 2) * 50;
+        const detailBaseY = Math.sin(angle) * detailDistance + Math.floor(topicIndex / 2) * 400; // 大幅增加垂直间距
+        
+        // 创建URL节点（第一个详情节点）
+        const urlNodeId = `url-${categoryIndex}-${topicIndex}`;
+        nodes.push({
+          id: urlNodeId,
+          type: 'detailNode',
+          data: {
+            label: 'URL',
+            url: topicData.url,
+            content: topicData.url,
+            branchIndex: categoryIndex,
+            parentId: topicNodeId,
+            isStructured: true,
+            structureType: 'url'
+          },
+          position: { x: detailBaseX, y: detailBaseY - 200 } // 上方
+        });
+        
+        // 连接主题节点和URL节点
+        edges.push({
+          id: `edge-${topicNodeId}-to-${urlNodeId}`,
+          source: topicNodeId,
+          target: urlNodeId,
+          type: 'detailEdge',
+          data: { branchIndex: categoryIndex }
+        });
+        
+        // 创建标题节点（第二个详情节点）
+        const titleNodeId = `title-${categoryIndex}-${topicIndex}`;
+        nodes.push({
+          id: titleNodeId,
+          type: 'detailNode',
+          data: {
+            label: '标题',
+            content: topicData.title || topicName,
+            branchIndex: categoryIndex,
+            parentId: topicNodeId,
+            isStructured: true,
+            structureType: 'title'
+          },
+          position: { x: detailBaseX, y: detailBaseY } // 中间
+        });
+        
+        // 连接主题节点和标题节点
+        edges.push({
+          id: `edge-${topicNodeId}-to-${titleNodeId}`,
+          source: topicNodeId,
+          target: titleNodeId,
+          type: 'detailEdge',
+          data: { branchIndex: categoryIndex }
+        });
+        
+        // 创建摘要节点（第三个详情节点）
+        const summaryNodeId = `summary-${categoryIndex}-${topicIndex}`;
+        nodes.push({
+          id: summaryNodeId,
+          type: 'detailNode',
+          data: {
+            label: '摘要',
+            content: topicData.summary || '无摘要',
+            branchIndex: categoryIndex,
+            parentId: topicNodeId,
+            isStructured: true,
+            structureType: 'summary'
+          },
+          position: { x: detailBaseX, y: detailBaseY + 200 } // 下方
+        });
+        
+        // 连接主题节点和摘要节点
+        edges.push({
+          id: `edge-${topicNodeId}-to-${summaryNodeId}`,
+          source: topicNodeId,
+          target: summaryNodeId,
+          type: 'detailEdge',
+          data: { branchIndex: categoryIndex }
+        });
+        
+        // 如果有文件属性，创建文件节点
+        if (topicData.file) {
+          const fileNodeId = `file-${categoryIndex}-${topicIndex}`;
+          let fileContent = '无文件内容';
+          
+          if (apiResponse.results[topicData.file]) {
+            try {
+              fileContent = JSON.stringify(apiResponse.results[topicData.file], null, 2);
+            } catch (e) {
+              console.error('无法解析文件内容:', e);
+            }
+          }
+          
+          nodes.push({
+            id: fileNodeId,
+            type: 'fileNode',
+            data: {
+              label: '文件内容',
+              content: fileContent,
+              branchIndex: categoryIndex,
+              parentId: topicNodeId,
+              file: topicData.file
+            },
+            position: { x: detailBaseX, y: detailBaseY + 400 } // 最下方
+          });
+          
+          // 连接主题节点和文件节点
+          edges.push({
+            id: `edge-${topicNodeId}-to-${fileNodeId}`,
+            source: topicNodeId,
+            target: fileNodeId,
+            type: 'detailEdge',
+            data: { branchIndex: categoryIndex }
+          });
+          
+          // 处理详细信息数据
+          if (apiResponse.results[topicData.file]) {
+            const detailsData = apiResponse.results[topicData.file] || [];
+            detailsData.forEach((detailCategory: any, detailCatIndex: number) => {
+              const detailCatName = Object.keys(detailCategory)[0];
+              if (!detailCatName) return;
+              
+              // 计算详细分类节点的位置
+              const detailCatDistance = 800;
+              const detailCatX = Math.cos(angle) * detailCatDistance + (detailCatIndex % 2) * 50;
+              const detailCatY = Math.sin(angle) * detailCatDistance + topicIndex * 100 + detailCatIndex * 50;
+              
+              // 创建详细分类节点
+              const detailCatNodeId = `detail-cat-${categoryIndex}-${topicIndex}-${detailCatIndex}`;
+              nodes.push({
+                id: detailCatNodeId,
+                type: 'topicNode',
+                data: {
+                  label: detailCatName,
+                  branchIndex: categoryIndex,
+                  parentId: topicNodeId
+                },
+                position: { x: detailCatX, y: detailCatY }
+              });
+              
+              // 连接主题节点和详细分类节点
+              edges.push({
+                id: `edge-${topicNodeId}-to-${detailCatNodeId}`,
+                source: topicNodeId,
+                target: detailCatNodeId,
+                type: 'detailEdge',
+                data: { branchIndex: categoryIndex }
+              });
+              
+              // 处理详细主题
+              const detailTopics = detailCategory[detailCatName] || [];
+              detailTopics.forEach((detailTopic: any, detailTopicIndex: number) => {
+                const detailTopicName = Object.keys(detailTopic)[0];
+                if (!detailTopicName) return;
+                
+                const detailTopicData = detailTopic[detailTopicName];
+                
+                // 计算详细主题节点的基础位置
+                const detailTopicDistance = 1000;
+                const detailTopicBaseX = Math.cos(angle) * detailTopicDistance + (detailTopicIndex % 2) * 50;
+                const detailTopicBaseY = Math.sin(angle) * detailTopicDistance + topicIndex * 100 + detailCatIndex * 50 + detailTopicIndex * 600; // 大幅增加垂直间距
+                
+                // 创建URL节点
+                const detailUrlNodeId = `detail-url-${categoryIndex}-${topicIndex}-${detailCatIndex}-${detailTopicIndex}`;
+                nodes.push({
+                  id: detailUrlNodeId,
+                  type: 'detailNode',
+                  data: {
+                    label: 'URL',
+                    url: detailTopicData.url,
+                    content: detailTopicData.url,
+                    branchIndex: categoryIndex,
+                    parentId: detailCatNodeId,
+                    isStructured: true,
+                    structureType: 'url'
+                  },
+                  position: { x: detailTopicBaseX, y: detailTopicBaseY - 200 } // 上方
+                });
+                
+                // 连接详细分类节点和URL节点
+                edges.push({
+                  id: `edge-${detailCatNodeId}-to-${detailUrlNodeId}`,
+                  source: detailCatNodeId,
+                  target: detailUrlNodeId,
+                  type: 'detailEdge',
+                  data: { branchIndex: categoryIndex }
+                });
+                
+                // 创建标题节点
+                const detailTitleNodeId = `detail-title-${categoryIndex}-${topicIndex}-${detailCatIndex}-${detailTopicIndex}`;
+                nodes.push({
+                  id: detailTitleNodeId,
+                  type: 'detailNode',
+                  data: {
+                    label: '标题',
+                    content: detailTopicData.title || detailTopicName,
+                    branchIndex: categoryIndex,
+                    parentId: detailCatNodeId,
+                    isStructured: true,
+                    structureType: 'title'
+                  },
+                  position: { x: detailTopicBaseX, y: detailTopicBaseY } // 中间
+                });
+                
+                // 连接详细分类节点和标题节点
+                edges.push({
+                  id: `edge-${detailCatNodeId}-to-${detailTitleNodeId}`,
+                  source: detailCatNodeId,
+                  target: detailTitleNodeId,
+                  type: 'detailEdge',
+                  data: { branchIndex: categoryIndex }
+                });
+                
+                // 创建摘要节点
+                const detailSummaryNodeId = `detail-summary-${categoryIndex}-${topicIndex}-${detailCatIndex}-${detailTopicIndex}`;
+                nodes.push({
+                  id: detailSummaryNodeId,
+                  type: 'detailNode',
+                  data: {
+                    label: '摘要',
+                    content: detailTopicData.summary || '无摘要',
+                    branchIndex: categoryIndex,
+                    parentId: detailCatNodeId,
+                    isStructured: true,
+                    structureType: 'summary'
+                  },
+                  position: { x: detailTopicBaseX, y: detailTopicBaseY + 200 } // 下方
+                });
+                
+                // 连接详细分类节点和摘要节点
+                edges.push({
+                  id: `edge-${detailCatNodeId}-to-${detailSummaryNodeId}`,
+                  source: detailCatNodeId,
+                  target: detailSummaryNodeId,
+                  type: 'detailEdge',
+                  data: { branchIndex: categoryIndex }
+                });
+                
+                // 如果有文件属性，创建文件节点
+                if (detailTopicData.file) {
+                  const detailFileNodeId = `detail-file-${categoryIndex}-${topicIndex}-${detailCatIndex}-${detailTopicIndex}`;
+                  let detailFileContent = '无文件内容';
+                  
+                  if (apiResponse.results[detailTopicData.file]) {
+                    try {
+                      detailFileContent = JSON.stringify(apiResponse.results[detailTopicData.file], null, 2);
+                    } catch (e) {
+                      console.error('无法解析文件内容:', e);
+                    }
+                  }
+                  
+                  nodes.push({
+                    id: detailFileNodeId,
+                    type: 'fileNode',
+                    data: {
+                      label: '文件内容',
+                      content: detailFileContent,
+                      branchIndex: categoryIndex,
+                      parentId: detailCatNodeId,
+                      file: detailTopicData.file
+                    },
+                    position: { x: detailTopicBaseX, y: detailTopicBaseY + 400 } // 最下方
+                  });
+                  
+                  // 连接详细分类节点和文件节点
+                  edges.push({
+                    id: `edge-${detailCatNodeId}-to-${detailFileNodeId}`,
+                    source: detailCatNodeId,
+                    target: detailFileNodeId,
+                    type: 'detailEdge',
+                    data: { branchIndex: categoryIndex }
+                  });
+                }
+              });
+            });
+          }
+        }
+      });
+    });
+    
+    return { nodes, edges };
   };
   
   // 重试分析
