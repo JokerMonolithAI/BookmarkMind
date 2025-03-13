@@ -161,4 +161,77 @@ export async function deleteBookmark(userId: string, bookmarkId: string): Promis
     console.error('Error deleting bookmark:', error);
     throw error;
   }
+}
+
+// 获取用户书签的所有分类（去重）
+export async function getUserBookmarkCategories(userId: string): Promise<string[]> {
+  try {
+    const dbRef = ref(db);
+    const snapshot = await get(child(dbRef, `users/${userId}/bookmarks/bookmarks`));
+    
+    if (!snapshot.exists()) {
+      return [];
+    }
+    
+    const bookmarks = snapshot.val();
+    const categories = new Set<string>();
+    
+    // 遍历所有书签，提取分类信息
+    Object.values(bookmarks).forEach((bookmark: any) => {
+      if (bookmark.analysis && bookmark.analysis.category) {
+        categories.add(bookmark.analysis.category);
+      }
+    });
+    
+    // 转换为数组并返回
+    return Array.from(categories);
+  } catch (error) {
+    console.error('Error fetching bookmark categories:', error);
+    throw error;
+  }
+}
+
+// 更新书签分类
+export async function updateBookmarkCategory(
+  userId: string,
+  oldCategory: string,
+  newCategory: string
+): Promise<void> {
+  try {
+    const dbRef = ref(db);
+    const snapshot = await get(child(dbRef, `users/${userId}/bookmarks/bookmarks`));
+    
+    if (!snapshot.exists()) {
+      throw new Error('没有找到书签数据');
+    }
+    
+    const bookmarks = snapshot.val();
+    const updates: Record<string, any> = {};
+    let updateCount = 0;
+    
+    // 遍历所有书签，查找需要更新的分类
+    Object.entries(bookmarks).forEach(([bookmarkId, bookmark]: [string, any]) => {
+      if (bookmark.analysis && bookmark.analysis.category === oldCategory) {
+        // 更新分类
+        updates[`users/${userId}/bookmarks/bookmarks/${bookmarkId}/analysis/category`] = newCategory;
+        updateCount++;
+      }
+    });
+    
+    // 如果没有需要更新的书签，抛出错误
+    if (updateCount === 0) {
+      throw new Error(`没有找到分类为 "${oldCategory}" 的书签`);
+    }
+    
+    // 更新最后修改时间
+    updates[`users/${userId}/bookmarks/lastUpdated`] = Date.now();
+    
+    // 批量更新数据库
+    await update(ref(db), updates);
+    
+    console.log(`成功更新 ${updateCount} 个书签的分类从 "${oldCategory}" 到 "${newCategory}"`);
+  } catch (error) {
+    console.error('更新书签分类失败:', error);
+    throw error;
+  }
 } 

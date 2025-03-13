@@ -7,28 +7,30 @@ import { Suspense } from 'react';
 import ImportButton from '@/components/dashboard/ImportButton';
 import { ViewToggle, ViewProvider, useView } from '@/components/dashboard/ViewToggle';
 import { SearchBar } from '@/components/dashboard/SearchBar';
-import { Loader2, Pencil, Trash2, AlertCircle } from 'lucide-react';
+import { Loader2, Pencil, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { apiService } from '@/lib/apiService';
 import MarkMap from '@/components/mindmap/MarkMap';
 import AnalysisProgress from '@/components/mindmap/AnalysisProgress';
 import { TaskStatus } from '@/types/mindmap';
-
-// 临时的分类数据，后续会从数据库获取
-const tempCategories = [
-  { id: 'all', name: '我的脑图' },
-  { id: 'cat1', name: '分类1' },
-  { id: 'cat2', name: '分类2' },
-  { id: 'cat3', name: '分类3' },
-];
+import { getUserBookmarkCategories, updateBookmarkCategory } from '@/lib/bookmarkService';
 
 // 脑图内容组件
 function MindMapContent() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
   const [categoryName, setCategoryName] = useState('');
+  const [originalCategoryName, setOriginalCategoryName] = useState('');
   const { user } = useAuth();
+  
+  // 分类数据状态
+  const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([
+    { id: 'all', name: '我的脑图' } // 默认固定的第一个分类
+  ]);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
   
   // 分析状态
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -37,6 +39,40 @@ function MindMapContent() {
   const [pollCount, setPollCount] = useState(0);
   const [markdownData, setMarkdownData] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // 加载分类数据
+  useEffect(() => {
+    async function loadCategories() {
+      if (!user) return;
+      
+      setIsLoadingCategories(true);
+      setCategoryError(null);
+      
+      try {
+        // 获取用户的所有书签分类
+        const categoryList = await getUserBookmarkCategories(user.uid);
+        
+        // 将分类数据转换为组件所需的格式
+        const formattedCategories = categoryList.map((category, index) => ({
+          id: `cat${index + 1}`, // 生成唯一ID
+          name: category
+        }));
+        
+        // 合并固定的"我的脑图"分类和从数据库获取的分类
+        setCategories([
+          { id: 'all', name: '我的脑图' },
+          ...formattedCategories
+        ]);
+      } catch (err) {
+        console.error('加载分类失败:', err);
+        setCategoryError(err instanceof Error ? err.message : '加载分类失败，请刷新页面重试');
+      } finally {
+        setIsLoadingCategories(false);
+      }
+    }
+    
+    loadCategories();
+  }, [user]);
 
   // 处理分类点击
   const handleCategoryClick = (categoryId: string) => {
@@ -53,19 +89,58 @@ function MindMapContent() {
   const handleEditClick = (category: { id: string; name: string }) => {
     setEditingCategory(category.id);
     setCategoryName(category.name);
-  };
-
-  // 处理分类删除
-  const handleDeleteClick = (categoryId: string) => {
-    // 这里将来会实现删除逻辑
-    console.log('删除分类:', categoryId);
+    setOriginalCategoryName(category.name);
   };
 
   // 处理编辑保存
-  const handleSaveEdit = () => {
-    // 这里将来会实现保存逻辑
-    console.log('保存编辑:', editingCategory, categoryName);
+  const handleSaveEdit = async () => {
+    if (!user || !editingCategory) return;
+    
+    // 如果分类名称没有变化，直接关闭编辑模式
+    if (categoryName === originalCategoryName) {
+      setEditingCategory(null);
+      return;
+    }
+    
+    setIsSavingCategory(true);
+    setCategoryError(null);
+    
+    try {
+      // 更新数据库中的分类
+      await updateBookmarkCategory(user.uid, originalCategoryName, categoryName);
+      
+      // 更新本地分类列表
+      setCategories(prevCategories => 
+        prevCategories.map(cat => 
+          cat.id === editingCategory ? { ...cat, name: categoryName } : cat
+        )
+      );
+      
+      // 如果当前选中的是被编辑的分类，更新选中状态
+      if (selectedCategory === editingCategory) {
+        // 重置脑图数据，以便使用新的分类名称重新加载
+        setMarkdownData(null);
+        setTaskStatus(null);
+        setTaskId(null);
+        setPollCount(0);
+        setError(null);
+      }
+      
+      // 关闭编辑模式
+      setEditingCategory(null);
+    } catch (err) {
+      console.error('保存分类失败:', err);
+      setCategoryError(err instanceof Error ? err.message : '保存分类失败，请重试');
+    } finally {
+      setIsSavingCategory(false);
+    }
+  };
+  
+  // 取消编辑
+  const handleCancelEdit = () => {
     setEditingCategory(null);
+    setCategoryName('');
+    setOriginalCategoryName('');
   };
   
   // 处理分析按钮点击
@@ -82,7 +157,7 @@ function MindMapContent() {
       // 获取当前选择的分类名称
       const categoryName = selectedCategory === 'all' 
         ? '书签脑图' // 使用"书签脑图"作为默认分类名称，与后端匹配
-        : tempCategories.find(c => c.id === selectedCategory)?.name || '书签脑图';
+        : categories.find(c => c.id === selectedCategory)?.name || '书签脑图';
       
       console.log(`开始分析分类: ${categoryName}`);
       
@@ -207,68 +282,89 @@ function MindMapContent() {
         <div className="w-48 border-r border-gray-200 bg-white">
           <div className="p-4">
             <h2 className="text-gray-500 text-sm font-medium mb-3">分类导航</h2>
-            <ul className="space-y-1">
-              {tempCategories.map((category) => (
-                <li key={category.id}>
-                  <div className="flex items-center justify-between group">
-                    {editingCategory === category.id ? (
-                      <div className="flex items-center w-full">
-                        <input
-                          type="text"
-                          value={categoryName}
-                          onChange={(e) => setCategoryName(e.target.value)}
-                          className="flex-1 p-1 border border-blue-300 rounded text-sm"
-                          autoFocus
-                        />
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={handleSaveEdit}
-                          className="ml-1 h-6 w-6 p-0"
-                        >
-                          ✓
-                        </Button>
-                      </div>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => handleCategoryClick(category.id)}
-                          className={`w-full text-left py-1.5 px-2 rounded-md text-sm ${
-                            selectedCategory === category.id
-                              ? 'bg-blue-50 text-blue-600'
-                              : 'hover:bg-gray-50 text-gray-700'
-                          }`}
-                        >
-                          {category.name}
-                        </button>
-                        
-                        {/* 只对非"我的脑图"显示编辑和删除按钮 */}
-                        {category.id !== 'all' && (
-                          <div className="hidden group-hover:flex">
+            
+            {/* 分类加载状态 */}
+            {isLoadingCategories ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-4 w-4 animate-spin text-blue-600 mr-2" />
+                <span className="text-sm text-gray-500">加载分类...</span>
+              </div>
+            ) : categoryError ? (
+              <div className="text-red-500 text-sm p-2">
+                {categoryError}
+              </div>
+            ) : (
+              <ul className="space-y-1">
+                {categories.map((category) => (
+                  <li key={category.id}>
+                    <div className="flex items-center justify-between group">
+                      {editingCategory === category.id ? (
+                        <div className="flex items-center w-full">
+                          <input
+                            type="text"
+                            value={categoryName}
+                            onChange={(e) => setCategoryName(e.target.value)}
+                            className="flex-1 p-1 border border-blue-300 rounded text-sm"
+                            autoFocus
+                          />
+                          <div className="flex">
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() => handleEditClick(category)}
+                              onClick={handleSaveEdit}
+                              disabled={isSavingCategory}
+                              className="ml-1 h-6 w-6 p-0"
+                            >
+                              {isSavingCategory ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                "✓"
+                              )}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={handleCancelEdit}
+                              disabled={isSavingCategory}
                               className="h-6 w-6 p-0"
                             >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleDeleteClick(category.id)}
-                              className="h-6 w-6 p-0 text-red-500"
-                            >
-                              <Trash2 className="h-3 w-3" />
+                              ✕
                             </Button>
                           </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
+                        </div>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleCategoryClick(category.id)}
+                            className={`w-full text-left py-1.5 px-2 rounded-md text-sm ${
+                              selectedCategory === category.id
+                                ? 'bg-blue-50 text-blue-600'
+                                : 'hover:bg-gray-50 text-gray-700'
+                            }`}
+                          >
+                            {category.name}
+                          </button>
+                          
+                          {/* 只对非"我的脑图"显示编辑按钮 */}
+                          {category.id !== 'all' && (
+                            <div className="hidden group-hover:flex">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleEditClick(category)}
+                                className="h-6 w-6 p-0"
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
 
