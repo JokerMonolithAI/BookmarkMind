@@ -29,8 +29,9 @@ function renderToolbar(mm: Markmap, wrapper: HTMLElement) {
       content: '刷新',
       onClick: () => mm.fit(),
     });
-    // 只使用部分默认工具，移除下载SVG按钮（包含欧元图标）
+    // 只使用指定的工具，排除recurse（跳转链接）和下载SVG按钮
     toolbar.setItems(['zoomIn', 'zoomOut', 'fit', 'refresh']);
+    
     wrapper.append(toolbar.render());
   }
 }
