@@ -240,6 +240,32 @@ class ApiService {
       throw error;
     }
   }
+  
+  // 获取指定分类的书签markdown数据
+  async getBookmarksMarkdown(category: string): Promise<MindMapAnalysisResponse> {
+    try {
+      const headers = await this.getAuthHeaders();
+      const user = auth.currentUser;
+      
+      if (!user) {
+        throw new Error("用户未登录");
+      }
+      
+      const response = await fetch(`${this.baseUrl}/bookmark/get-bookmarks-markdown`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          userId: user.uid,
+          category: category
+        })
+      });
+      
+      return this.handleResponse<MindMapAnalysisResponse>(response);
+    } catch (error) {
+      console.error("获取书签markdown数据失败:", error);
+      throw error;
+    }
+  }
 }
 
 export const apiService = new ApiService(); 

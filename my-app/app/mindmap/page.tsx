@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Suspense } from 'react';
 import ImportButton from '@/components/dashboard/ImportButton';
 import { ViewToggle, ViewProvider, useView } from '@/components/dashboard/ViewToggle';
@@ -73,9 +73,57 @@ function MindMapContent() {
     
     loadCategories();
   }, [user]);
+  
+  // 加载分类的脑图数据
+  const loadCategoryMarkdown = useCallback(async (categoryId: string) => {
+    if (!user) return;
+    
+    setIsAnalyzing(true);
+    setError(null);
+    
+    try {
+      // 获取当前选择的分类名称
+      const categoryName = categoryId === 'all' 
+        ? '我的脑图' // 使用"我的脑图"作为默认分类名称
+        : categories.find(c => c.id === categoryId)?.name || '我的脑图';
+      
+      console.log(`加载分类脑图: ${categoryName}`);
+      
+      // 调用API获取markdown数据
+      const response = await apiService.getBookmarksMarkdown(categoryName);
+      
+      if (response.markdown) {
+        // 直接显示markdown数据
+        console.log('获取到markdown数据');
+        // 使用requestAnimationFrame确保DOM已更新
+        requestAnimationFrame(() => {
+          setMarkdownData(response.markdown || null);
+        });
+      } else {
+        throw new Error('获取脑图数据失败');
+      }
+    } catch (err) {
+      console.error('加载分类脑图失败:', err);
+      setError(err instanceof Error ? err.message : '加载分类脑图失败，请稍后重试');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, [user, categories]);
+
+  // 在分类数据加载完成后自动加载默认分类的脑图数据
+  useEffect(() => {
+    // 确保分类数据已加载完成且不在加载状态
+    if (!isLoadingCategories && categories.length > 0 && user && !markdownData && !isAnalyzing) {
+      // 加载默认选中分类的脑图数据
+      loadCategoryMarkdown(selectedCategory);
+    }
+  }, [isLoadingCategories, categories, user, selectedCategory, loadCategoryMarkdown, markdownData, isAnalyzing]);
 
   // 处理分类点击
-  const handleCategoryClick = (categoryId: string) => {
+  const handleCategoryClick = async (categoryId: string) => {
+    // 如果已经选中该分类，则不重复加载
+    if (selectedCategory === categoryId) return;
+    
     setSelectedCategory(categoryId);
     // 切换分类时重置脑图数据
     setMarkdownData(null);
@@ -83,8 +131,11 @@ function MindMapContent() {
     setTaskId(null);
     setPollCount(0);
     setError(null);
+    
+    // 自动加载对应分类的脑图数据
+    await loadCategoryMarkdown(categoryId);
   };
-
+  
   // 处理分类编辑
   const handleEditClick = (category: { id: string; name: string }) => {
     setEditingCategory(category.id);
@@ -151,13 +202,14 @@ function MindMapContent() {
     setError(null);
     setMarkdownData(null);
     setTaskStatus(null);
+    setTaskId(null);
     setPollCount(0);
     
     try {
       // 获取当前选择的分类名称
       const categoryName = selectedCategory === 'all' 
-        ? '书签脑图' // 使用"书签脑图"作为默认分类名称，与后端匹配
-        : categories.find(c => c.id === selectedCategory)?.name || '书签脑图';
+        ? '我的脑图' // 使用"我的脑图"作为默认分类名称
+        : categories.find(c => c.id === selectedCategory)?.name || '我的脑图';
       
       console.log(`开始分析分类: ${categoryName}`);
       
@@ -180,8 +232,11 @@ function MindMapContent() {
       } else if (response.markdown) {
         // 如果直接返回Markdown结果，无需轮询
         console.log('直接获取到分析结果:', response.markdown);
-        setMarkdownData(response.markdown);
-        setIsAnalyzing(false);
+        // 使用requestAnimationFrame确保DOM已更新
+        requestAnimationFrame(() => {
+          setMarkdownData(response.markdown || null);
+          setIsAnalyzing(false);
+        });
       } else {
         throw new Error('分析任务启动失败');
       }
@@ -215,12 +270,16 @@ function MindMapContent() {
               
               // 确保结果格式正确
               if (result && result.markdown) {
-                setMarkdownData(result.markdown);
+                // 使用requestAnimationFrame确保DOM已更新
+                requestAnimationFrame(() => {
+                  setMarkdownData(result.markdown || null);
+                  setIsAnalyzing(false);
+                });
               } else {
                 console.error('分析结果格式不正确:', result);
                 setError('分析结果格式不正确，请重试');
+                setIsAnalyzing(false);
               }
-              setIsAnalyzing(false);
             } else if (status.status === 'failed') {
               // 任务失败
               console.error('分析任务失败:', status.error);
@@ -267,6 +326,21 @@ function MindMapContent() {
           
           <div className="flex items-center gap-3 flex-1 justify-center">
             <ImportButton />
+            <Button 
+              onClick={handleAnalyzeClick} 
+              disabled={isAnalyzing}
+              variant="outline"
+              className="border-gray-300 hover:bg-gray-100"
+            >
+              {isAnalyzing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  分析中...
+                </>
+              ) : (
+                '开始分析书签'
+              )}
+            </Button>
             <SearchBar />
           </div>
           
@@ -392,23 +466,26 @@ function MindMapContent() {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 h-[calc(100vh-220px)]">
             {markdownData ? (
               <MarkMap markdown={markdownData} />
+            ) : isAnalyzing ? (
+              <div className="flex items-center justify-center h-full flex-col">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
+                <p className="text-gray-500 text-sm">加载脑图中...</p>
+              </div>
             ) : (
               <div className="flex items-center justify-center h-full flex-col">
-                <Button 
-                  onClick={handleAnalyzeClick} 
-                  disabled={isAnalyzing}
-                  className="mb-4"
-                >
-                  {isAnalyzing ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      分析中...
-                    </>
-                  ) : (
-                    '开始分析书签'
-                  )}
-                </Button>
-                <p className="text-gray-500 text-sm">点击按钮开始分析书签并生成脑图</p>
+                <p className="text-gray-500 text-sm">
+                  {error ? '加载失败，请重试或选择其他分类' : '点击左侧分类导航查看脑图'}
+                </p>
+                {error && (
+                  <Button 
+                    onClick={() => loadCategoryMarkdown(selectedCategory)} 
+                    variant="outline"
+                    size="sm"
+                    className="mt-4"
+                  >
+                    重新加载
+                  </Button>
+                )}
               </div>
             )}
           </div>
