@@ -37,6 +37,15 @@ function renderToolbar(mm: Markmap, wrapper: HTMLElement) {
 }
 
 /**
+ * 检查值是否为有效数字
+ * @param value 要检查的值
+ * @returns 如果是有效数字则返回true，否则返回false
+ */
+function isValidNumber(value: any): boolean {
+  return typeof value === 'number' && !isNaN(value) && isFinite(value);
+}
+
+/**
  * MarkMap组件 - 使用markmap库将Markdown渲染为思维导图
  */
 const MarkMap: React.FC<MarkMapProps> = ({
@@ -45,16 +54,18 @@ const MarkMap: React.FC<MarkMapProps> = ({
 }) => {
   // SVG元素的引用
   const svgRef = useRef<SVGSVGElement>(null);
+  // 容器元素的引用
+  const containerRef = useRef<HTMLDivElement>(null);
   // Markmap实例的引用
   const markmapRef = useRef<Markmap | null>(null);
   // 工具栏容器的引用
   const toolbarRef = useRef<HTMLDivElement>(null);
   // 添加状态跟踪组件是否已挂载
   const [isMounted, setIsMounted] = useState(false);
-  // 添加状态跟踪SVG是否已准备好
-  const [isSvgReady, setIsSvgReady] = useState(false);
   // 添加状态跟踪当前markdown
   const [currentMarkdown, setCurrentMarkdown] = useState<string | null>(null);
+  // 添加状态跟踪SVG是否已准备好
+  const [isSvgReady, setIsSvgReady] = useState(false);
 
   // 组件挂载状态
   useEffect(() => {
@@ -62,7 +73,14 @@ const MarkMap: React.FC<MarkMapProps> = ({
     return () => {
       // 组件卸载时清理
       setIsMounted(false);
-      markmapRef.current = null;
+      if (markmapRef.current) {
+        try {
+          // 尝试清理旧实例
+          markmapRef.current = null;
+        } catch (e) {
+          console.error('清理Markmap实例失败:', e);
+        }
+      }
     };
   }, []);
 
@@ -76,28 +94,10 @@ const MarkMap: React.FC<MarkMapProps> = ({
     }
   }, [markdown]);
 
-  // 初始化SVG元素
+  // 添加自定义样式
   useEffect(() => {
-    if (!svgRef.current || !isMounted) return;
+    if (!isMounted) return;
     
-    // 确保SVG元素有合适的尺寸
-    const svg = svgRef.current;
-    svg.setAttribute('width', '100%');
-    svg.setAttribute('height', '100%');
-    
-    // 使用ResizeObserver监听SVG元素尺寸变化
-    const resizeObserver = new ResizeObserver(entries => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        if (width > 0 && height > 0) {
-          setIsSvgReady(true);
-        }
-      }
-    });
-    
-    resizeObserver.observe(svg);
-    
-    // 添加自定义样式
     const styleId = 'markmap-custom-style';
     if (!document.getElementById(styleId)) {
       const style = document.createElement('style');
@@ -132,15 +132,49 @@ const MarkMap: React.FC<MarkMapProps> = ({
       `;
       document.head.appendChild(style);
     }
+  }, [isMounted]);
+
+  // 初始化SVG元素
+  useEffect(() => {
+    if (!svgRef.current || !containerRef.current || !isMounted) return;
+    
+    const svg = svgRef.current;
+    const container = containerRef.current;
+    
+    // 确保SVG元素有明确的尺寸
+    const updateSvgSize = () => {
+      const containerRect = container.getBoundingClientRect();
+      
+      // 确保尺寸是有效的正数
+      const width = Math.max(containerRect.width, 100);
+      const height = Math.max(containerRect.height, 100);
+      
+      // 设置SVG的viewBox和尺寸
+      svg.setAttribute('width', `${width}px`);
+      svg.setAttribute('height', `${height}px`);
+      svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    };
+    
+    // 初始更新尺寸
+    updateSvgSize();
+    
+    // 使用ResizeObserver监听容器尺寸变化
+    const resizeObserver = new ResizeObserver(() => {
+      updateSvgSize();
+      // 标记SVG已准备好
+      setIsSvgReady(true);
+    });
+    
+    resizeObserver.observe(container);
     
     return () => {
       resizeObserver.disconnect();
     };
-  }, [svgRef.current, isMounted]);
+  }, [svgRef.current, containerRef.current, isMounted]);
 
-  // 创建Markmap实例
+  // 创建和更新Markmap实例
   useEffect(() => {
-    if (!svgRef.current || !isMounted || !isSvgReady || !currentMarkdown) return;
+    if (!svgRef.current || !isMounted || !currentMarkdown || !containerRef.current || !isSvgReady) return;
     
     // 清理之前的实例
     if (markmapRef.current) {
@@ -157,8 +191,16 @@ const MarkMap: React.FC<MarkMapProps> = ({
     }
     
     try {
+      const svg = svgRef.current;
+      const container = containerRef.current;
+      const containerRect = container.getBoundingClientRect();
+      
+      // 确保尺寸是有效的正数
+      const width = Math.max(containerRect.width, 100);
+      const height = Math.max(containerRect.height, 100);
+      
       // 创建Markmap实例
-      const mm = Markmap.create(svgRef.current, {
+      const mm = Markmap.create(svg, {
         // 自定义配置
         nodeMinHeight: 20,
         spacingHorizontal: 120,
@@ -168,8 +210,32 @@ const MarkMap: React.FC<MarkMapProps> = ({
         maxWidth: 500, // 限制节点最大宽度
         initialExpandLevel: -1, // 展开所有节点
         zoom: true,
-        pan: true
+        pan: true,
       });
+      
+      // 手动设置d3-zoom的extent，解决SVGLength错误
+      if (mm.zoom && typeof mm.zoom.extent === 'function') {
+        mm.zoom.extent([[0, 0], [width, height]]);
+      }
+      
+      // 修补d3-zoom的transform函数，防止NaN值
+      if (mm.zoom && mm.zoom.transform) {
+        const originalTransform = mm.zoom.transform;
+        mm.zoom.transform = function(selection, transform) {
+          // 检查transform对象的x、y和k值是否有效
+          if (transform && 
+              // 使用类型守卫检查transform是否为对象且具有x、y、k属性
+              typeof transform === 'object' && 
+              'x' in transform && isValidNumber(transform.x) && 
+              'y' in transform && isValidNumber(transform.y) && 
+              'k' in transform && isValidNumber(transform.k)) {
+            return originalTransform.call(this, selection, transform);
+          } else {
+            console.warn('跳过无效的transform:', transform);
+            return selection;
+          }
+        };
+      }
       
       markmapRef.current = mm;
       
@@ -179,7 +245,7 @@ const MarkMap: React.FC<MarkMapProps> = ({
       }
       
       // 添加事件监听器，确保所有链接在新标签页打开
-      svgRef.current.addEventListener('click', (e) => {
+      svg.addEventListener('click', (e) => {
         const target = e.target as Element;
         if (target.tagName === 'A' || target.closest('a')) {
           const link = target.tagName === 'A' ? target : target.closest('a');
@@ -197,24 +263,80 @@ const MarkMap: React.FC<MarkMapProps> = ({
       // 更新数据
       mm.setData(root);
       
-      // 使用setTimeout确保DOM已更新
-      setTimeout(() => {
+      // 使用requestAnimationFrame确保DOM已更新
+      requestAnimationFrame(() => {
         if (mm && isMounted) {
-          mm.fit();
+          try {
+            mm.fit();
+          } catch (e) {
+            console.error('适应视图失败:', e);
+          }
         }
-      }, 300);
+      });
     } catch (error) {
       console.error('初始化Markmap失败:', error);
     }
-  }, [isSvgReady, currentMarkdown, isMounted]);
+  }, [currentMarkdown, isMounted, isSvgReady]);
+
+  // 监听窗口大小变化
+  useEffect(() => {
+    if (!isMounted || !containerRef.current) return;
+    
+    const handleResize = () => {
+      if (markmapRef.current && containerRef.current && svgRef.current) {
+        const container = containerRef.current;
+        const containerRect = container.getBoundingClientRect();
+        
+        // 确保尺寸是有效的正数
+        const width = Math.max(containerRect.width, 100);
+        const height = Math.max(containerRect.height, 100);
+        
+        // 更新SVG尺寸
+        const svg = svgRef.current;
+        svg.setAttribute('width', `${width}px`);
+        svg.setAttribute('height', `${height}px`);
+        svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+        
+        // 更新extent
+        try {
+          // 访问内部zoom属性并设置extent
+          const mm = markmapRef.current;
+          if (mm.zoom && typeof mm.zoom.extent === 'function') {
+            mm.zoom.extent([[0, 0], [width, height]]);
+          }
+          
+          // 适应视图
+          mm.fit();
+        } catch (e) {
+          console.error('更新Markmap尺寸失败:', e);
+        }
+      }
+    };
+    
+    // 使用防抖函数包装handleResize
+    let resizeTimeout: NodeJS.Timeout | null = null;
+    const debouncedResize = () => {
+      if (resizeTimeout) {
+        clearTimeout(resizeTimeout);
+      }
+      resizeTimeout = setTimeout(handleResize, 100);
+    };
+    
+    window.addEventListener('resize', debouncedResize);
+    
+    return () => {
+      window.removeEventListener('resize', debouncedResize);
+      if (resizeTimeout) {
+        clearTimeout(resizeTimeout);
+      }
+    };
+  }, [isMounted]);
 
   return (
-    <div className={`relative ${className}`}>
+    <div ref={containerRef} className={`relative ${className}`}>
       <svg 
         ref={svgRef} 
         className="w-full h-full" 
-        width="100%" 
-        height="100%" 
         style={{ minHeight: '600px' }}
       />
       <div className="absolute bottom-4 right-4" ref={toolbarRef}></div>
