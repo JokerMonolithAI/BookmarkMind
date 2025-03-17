@@ -69,9 +69,16 @@ export async function getCollection(userId: string, collectionId: string): Promi
     }
     
     const collectionData = snapshot.val();
+    
+    // 获取实际的书签数量
+    const bookmarksRef = ref(db, `users/${userId}/collection_bookmarks/${collectionId}`);
+    const bookmarksSnapshot = await get(bookmarksRef);
+    const actualBookmarkCount = bookmarksSnapshot.exists() ? Object.keys(bookmarksSnapshot.val()).length : 0;
+    
     return {
       id: collectionId,
-      ...collectionData
+      ...collectionData,
+      bookmarkCount: actualBookmarkCount // 使用实际计算的书签数量
     };
   } catch (error) {
     console.error('Error fetching collection:', error);

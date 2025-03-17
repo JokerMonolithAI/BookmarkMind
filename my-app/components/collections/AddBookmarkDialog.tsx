@@ -35,7 +35,7 @@ export function AddBookmarkDialog({
   const { user } = useAuth();
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [filteredBookmarks, setFilteredBookmarks] = useState<Bookmark[]>([]);
-  const [selectedBookmarkId, setSelectedBookmarkId] = useState<string | null>(null);
+  const [selectedBookmarkIds, setSelectedBookmarkIds] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -65,10 +65,15 @@ export function AddBookmarkDialog({
     fetchBookmarks();
   }, [user, open]);
 
+  // 监听选中书签的变化，确保状态更新
+  useEffect(() => {
+    console.log('Selected bookmarks:', selectedBookmarkIds.length);
+  }, [selectedBookmarkIds]);
+
   // 处理对话框关闭
   const handleOpenChange = (open: boolean) => {
     if (!open) {
-      setSelectedBookmarkId(null);
+      setSelectedBookmarkIds([]);
       setSearchQuery('');
       setError('');
     }
@@ -96,7 +101,14 @@ export function AddBookmarkDialog({
 
   // 处理书签选择
   const handleBookmarkSelect = (bookmarkId: string) => {
-    setSelectedBookmarkId(bookmarkId === selectedBookmarkId ? null : bookmarkId);
+    setSelectedBookmarkIds(prevSelected => {
+      const newSelected = prevSelected.includes(bookmarkId)
+        ? prevSelected.filter(id => id !== bookmarkId)
+        : [...prevSelected, bookmarkId];
+      
+      console.log('Updating selected bookmarks:', newSelected.length);
+      return newSelected;
+    });
   };
 
   // 处理提交
@@ -108,8 +120,8 @@ export function AddBookmarkDialog({
       return;
     }
 
-    if (!selectedBookmarkId) {
-      setError('请选择要添加的书签');
+    if (selectedBookmarkIds.length === 0) {
+      setError('请至少选择一个要添加的书签');
       return;
     }
 
@@ -117,18 +129,18 @@ export function AddBookmarkDialog({
       setIsSubmitting(true);
       setError('');
       
-      // 添加书签到收藏集
-      await addBookmarkToCollection(
-        user.uid, 
-        collectionId, 
-        selectedBookmarkId
+      // 添加所有选中的书签到收藏集
+      const promises = selectedBookmarkIds.map(bookmarkId => 
+        addBookmarkToCollection(user.uid, collectionId, bookmarkId)
       );
       
-      setSelectedBookmarkId(null);
+      await Promise.all(promises);
+      
+      setSelectedBookmarkIds([]);
       setSearchQuery('');
       onAdded();
     } catch (error) {
-      console.error('Error adding bookmark to collection:', error);
+      console.error('Error adding bookmarks to collection:', error);
       setError('添加书签失败，请稍后重试');
     } finally {
       setIsSubmitting(false);
@@ -142,7 +154,7 @@ export function AddBookmarkDialog({
           <DialogHeader>
             <DialogTitle>添加书签到收藏集</DialogTitle>
             <DialogDescription>
-              从您的书签中选择要添加到当前收藏集的书签。
+              从您的书签中选择要添加到当前收藏集的书签。您可以选择多个书签同时添加。
             </DialogDescription>
           </DialogHeader>
           
@@ -178,7 +190,7 @@ export function AddBookmarkDialog({
                         key={bookmark.id}
                         className={cn(
                           "flex items-start gap-2 p-2 rounded-md cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800",
-                          selectedBookmarkId === bookmark.id && "bg-blue-50 dark:bg-blue-900/20"
+                          selectedBookmarkIds.includes(bookmark.id) && "bg-blue-50 dark:bg-blue-900/20"
                         )}
                         onClick={() => handleBookmarkSelect(bookmark.id)}
                       >
@@ -197,7 +209,7 @@ export function AddBookmarkDialog({
                           <div className="font-medium text-sm truncate">{bookmark.title}</div>
                           <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{bookmark.url}</div>
                         </div>
-                        {selectedBookmarkId === bookmark.id && (
+                        {selectedBookmarkIds.includes(bookmark.id) && (
                           <Check className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0" />
                         )}
                       </div>
@@ -206,6 +218,13 @@ export function AddBookmarkDialog({
                 </ScrollArea>
               )}
             </div>
+            
+            {/* 已选择的书签数量 */}
+            {selectedBookmarkIds.length > 0 && (
+              <div className="text-sm text-blue-600 dark:text-blue-400">
+                已选择 {selectedBookmarkIds.length} 个书签
+              </div>
+            )}
             
             {error && (
               <div className="text-sm text-red-500 mt-1">{error}</div>
@@ -221,14 +240,23 @@ export function AddBookmarkDialog({
             >
               取消
             </Button>
-            <Button type="submit" disabled={isSubmitting || !selectedBookmarkId}>
+            <Button 
+              type="submit" 
+              disabled={isSubmitting || selectedBookmarkIds.length === 0}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   添加中...
                 </>
               ) : (
-                '添加到收藏集'
+                <>
+                  添加
+                  {selectedBookmarkIds.length > 0 && (
+                    <span className="ml-1">({selectedBookmarkIds.length})</span>
+                  )}
+                </>
               )}
             </Button>
           </DialogFooter>

@@ -176,12 +176,7 @@ export function BookmarkCard({ bookmark, viewMode = 'grid', onDeleted }: Bookmar
           </CardContent>
           <CardFooter className="px-4 py-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 flex justify-between">
             <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-              {bookmark.isFavorite && (
-                <Star className="h-3.5 w-3.5 mr-1 text-yellow-500" />
-              )}
-              {!bookmark.isRead && (
-                <div className="h-2 w-2 rounded-full bg-blue-500 mr-1"></div>
-              )}
+              {/* 移除左侧内容 */}
             </div>
             <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
               <Clock className="h-3.5 w-3.5 mr-1" />

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Sparkles, ChevronDown } from 'lucide-react';
 import { createCollection } from '@/lib/collectionService';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,6 +16,26 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+
+// 推荐的收藏集名称
+const SUGGESTED_COLLECTION_NAMES = [
+  { name: "AI工具集", description: "收集各类AI工具、模型和应用" },
+  { name: "AI学习路径", description: "存放AI学习资源、教程和论文" },
+  { name: "AI提示词库", description: "收集有效的提示词和提示工程技巧" },
+  { name: "考试备考", description: "适合存放考试资料、习题和备考策略" },
+  { name: "语言学习", description: "收集语言学习资源、词汇和练习材料" },
+  { name: "职业发展", description: "存放职业规划、简历模板和面试技巧" },
+  { name: "创意项目", description: "收集DIY项目、手工艺和创意灵感" },
+  { name: "健康生活", description: "收集健康知识、锻炼计划和饮食建议" },
+  { name: "每日精选", description: "收集每日值得阅读的文章和新闻" },
+  { name: "深度阅读", description: "存放长篇文章、研究报告和深度分析" },
+];
 
 interface CreateCollectionDialogProps {
   open: boolean;
@@ -82,6 +102,12 @@ export function CreateCollectionDialog({
     }
   };
 
+  // 选择推荐的收藏集名称
+  const handleSelectSuggestion = (suggestion: { name: string; description: string }) => {
+    setName(suggestion.name);
+    setDescription(suggestion.description);
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
@@ -94,9 +120,37 @@ export function CreateCollectionDialog({
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="name" className="required">
-                收藏集名称
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="name" className="required">
+                  收藏集名称
+                </Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-8 px-2 text-xs"
+                      type="button"
+                    >
+                      <Sparkles className="h-3.5 w-3.5 mr-1" />
+                      推荐名称
+                      <ChevronDown className="h-3.5 w-3.5 ml-1" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-80 max-h-80 overflow-auto">
+                    {SUGGESTED_COLLECTION_NAMES.map((suggestion, index) => (
+                      <DropdownMenuItem 
+                        key={index}
+                        onClick={() => handleSelectSuggestion(suggestion)}
+                        className="flex flex-col items-start p-2.5 cursor-pointer"
+                      >
+                        <span className="font-medium text-sm">{suggestion.name}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{suggestion.description}</span>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
               <Input
                 id="name"
                 value={name}
@@ -134,7 +188,11 @@ export function CreateCollectionDialog({
             >
               取消
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button 
+              type="submit" 
+              disabled={isSubmitting}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

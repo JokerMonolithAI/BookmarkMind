@@ -32,7 +32,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Bookmark as BookmarkType } from '@/lib/bookmarkService';
+import { Bookmark as BookmarkType, getUserBookmarksByIds } from '@/lib/bookmarkService';
 import { BookmarkCard } from '@/components/bookmarks/BookmarkCard';
 import { AddBookmarkDialog } from '@/components/collections/AddBookmarkDialog';
 import { eventService, EVENTS } from '@/lib/eventService';
@@ -81,30 +81,16 @@ function CollectionContent() {
       const collectionData = await getCollection(user.uid, collectionId);
       setCollection(collectionData);
       
-      // 获取收藏集中的书签
+      // 获取收藏集中的书签ID
       const bookmarkIds = await getCollectionBookmarks(user.uid, collectionId);
       
-      // 这里应该是根据书签ID获取书签详情的逻辑
-      // 由于目前API尚未完全实现，我们使用模拟数据
-      const now = Date.now();
-      const mockBookmarks: CollectionBookmark[] = bookmarkIds.map((id, index) => ({
-        id,
-        userId: user.uid,
-        url: `https://example.com/bookmark/${id}`,
-        title: `书签 ${index + 1}`,
-        description: `这是书签 ${index + 1} 的描述`,
-        tags: ['示例', `标签${index}`],
-        favicon: 'https://example.com/favicon.ico',
-        createdAt: now - index * 86400000,
-        addedAt: now - index * 86400000, // 每个书签的添加时间相差一天
-        updatedAt: new Date().toISOString(),
-        visitCount: Math.floor(Math.random() * 10),
-        isRead: Math.random() > 0.5,
-        isFavorite: Math.random() > 0.7,
-        type: 'article'
-      }));
-      
-      setBookmarks(mockBookmarks);
+      if (bookmarkIds.length > 0) {
+        // 根据书签ID获取书签详情
+        const bookmarksData = await getUserBookmarksByIds(user.uid, bookmarkIds);
+        setBookmarks(bookmarksData);
+      } else {
+        setBookmarks([]);
+      }
     } catch (error) {
       console.error('Error fetching collection data:', error);
     } finally {

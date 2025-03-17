@@ -448,3 +448,35 @@ export async function searchBookmarks(userId: string, query: string): Promise<Bo
     return [];
   }
 }
+
+// 根据ID数组获取用户的书签
+export async function getUserBookmarksByIds(userId: string, bookmarkIds: string[]): Promise<Bookmark[]> {
+  try {
+    if (!bookmarkIds.length) return [];
+    
+    const userBookmarksRef = ref(db, `users/${userId}/bookmarks/bookmarks`);
+    const snapshot = await get(userBookmarksRef);
+    
+    if (!snapshot.exists()) {
+      return [];
+    }
+    
+    const allBookmarks = snapshot.val();
+    const result: Bookmark[] = [];
+    
+    // 筛选出指定ID的书签
+    for (const id of bookmarkIds) {
+      if (allBookmarks[id]) {
+        result.push({
+          id,
+          ...allBookmarks[id]
+        });
+      }
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('Error fetching bookmarks by IDs:', error);
+    throw error;
+  }
+}
