@@ -66,6 +66,41 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* 渐变背景卡片样式 - 优化版 */
+.card-gradient-purple {
+  background: linear-gradient(135deg, #c084fc 0%, #8b5cf6 100%);
+  color: white;
+  border: none !important;
+  box-shadow: 0 10px 15px -3px rgba(139, 92, 246, 0.3), 0 4px 6px -4px rgba(139, 92, 246, 0.4);
+}
+
+.card-gradient-orange {
+  background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
+  color: white;
+  border: none !important;
+  box-shadow: 0 10px 15px -3px rgba(234, 88, 12, 0.3), 0 4px 6px -4px rgba(234, 88, 12, 0.4);
+}
+
+.card-gradient-green {
+  background: linear-gradient(135deg, #4ade80 0%, #16a34a 100%);
+  color: white;
+  border: none !important;
+  box-shadow: 0 10px 15px -3px rgba(22, 163, 74, 0.3), 0 4px 6px -4px rgba(22, 163, 74, 0.4);
+}
+
+/* 暗色模式下的渐变卡片阴影 */
+.dark .card-gradient-purple {
+  box-shadow: 0 10px 15px -3px rgba(139, 92, 246, 0.2), 0 4px 6px -4px rgba(139, 92, 246, 0.3);
+}
+
+.dark .card-gradient-orange {
+  box-shadow: 0 10px 15px -3px rgba(234, 88, 12, 0.2), 0 4px 6px -4px rgba(234, 88, 12, 0.3);
+}
+
+.dark .card-gradient-green {
+  box-shadow: 0 10px 15px -3px rgba(22, 163, 74, 0.2), 0 4px 6px -4px rgba(22, 163, 74, 0.3);
+}
+
 /* React Flow 样式 */
 .react-flow__node {
   transition: transform 0.3s ease, box-shadow 0.3s ease;

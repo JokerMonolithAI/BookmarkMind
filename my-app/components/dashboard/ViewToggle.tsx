@@ -35,15 +35,15 @@ export function ViewToggle() {
   };
 
   return (
-    <div className="flex items-center bg-gray-100 p-1 rounded-md">
+    <div className="flex items-center bg-gray-100 dark:bg-gray-800 p-1 rounded-md">
       <Button
         variant="ghost"
         size="sm"
         onClick={() => handleViewChange('list')}
         className={`h-8 px-3 flex items-center gap-1.5 rounded-md transition-colors duration-200 ${
           (activeView === 'list' || pathname === '/dashboard')
-            ? 'bg-white text-gray-900 shadow-sm' 
-            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' 
+            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100'
         }`}
       >
         <List className="h-4 w-4" />
@@ -56,8 +56,8 @@ export function ViewToggle() {
         onClick={() => handleViewChange('grid')}
         className={`h-8 px-3 flex items-center gap-1.5 rounded-md transition-colors duration-200 ${
           (activeView === 'grid' || pathname === '/mindmap')
-            ? 'bg-white text-gray-900 shadow-sm' 
-            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' 
+            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100'
         }`}
       >
         <Grid3X3 className="h-4 w-4" />
@@ -70,8 +70,8 @@ export function ViewToggle() {
         onClick={() => handleViewChange('timeline')}
         className={`h-8 px-3 flex items-center gap-1.5 rounded-md transition-colors duration-200 ${
           activeView === 'timeline' 
-            ? 'bg-white text-gray-900 shadow-sm' 
-            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' 
+            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100'
         }`}
       >
         <Clock className="h-4 w-4" />

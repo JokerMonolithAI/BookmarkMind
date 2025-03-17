@@ -48,162 +48,120 @@ export default function BookmarkList() {
   const { user } = useAuth();
   const { activeView } = useView();
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
-  const [filteredBookmarks, setFilteredBookmarks] = useState<Bookmark[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState(1);
-  const bookmarksPerPage = 12;
   const [bookmarkToDelete, setBookmarkToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  // 添加PDF上传相关状态
-  const [uploadingPdf, setUploadingPdf] = useState<string | null>(null);
+  const [uploadingBookmarkId, setUploadingBookmarkId] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
-  
-  // 初始化Firebase Storage
-  const storage = getStorage();
+  const [isUploading, setIsUploading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(12);
 
+  // 获取书签数据
   const fetchBookmarks = useCallback(async () => {
     if (!user) return;
     
     try {
       setLoading(true);
-      
-      // 获取数据库引用 - 修复路径，添加额外的 bookmarks 层级
       const bookmarksRef = ref(db, `users/${user.uid}/bookmarks/bookmarks`);
-      
-      // 获取快照
       const snapshot = await get(bookmarksRef);
       
       if (snapshot.exists()) {
         const data = snapshot.val();
+        const bookmarksArray: Bookmark[] = [];
         
-        // 转换数据
-        let bookmarksArray: Bookmark[] = [];
+        // 处理数据，转换为数组
+        Object.keys(data).forEach(key => {
+          if (data[key].url) {
+            bookmarksArray.push({
+              id: key,
+              ...data[key]
+            });
+          }
+        });
         
-        // 检查数据结构，处理可能的嵌套情况
-        if (typeof data === 'object') {
-          // 直接遍历顶层对象
-          Object.keys(data).forEach(key => {
-            const item = data[key];
-            
-            // 检查是否是有效的书签对象
-            if (item && typeof item === 'object' && item.url) {
-              bookmarksArray.push({
-                id: key,
-                ...item
-              });
-            } else if (item && typeof item === 'object') {
-              // 可能是嵌套的情况，再遍历一层
-              Object.keys(item).forEach(subKey => {
-                const subItem = item[subKey];
-                if (subItem && typeof subItem === 'object' && subItem.url) {
-                  bookmarksArray.push({
-                    id: `${key}_${subKey}`,
-                    ...subItem
-                  });
-                }
-              });
-            }
-          });
-        }
-        
-        // 按创建时间排序，最新的在前面
+        // 按添加时间排序，最新的在前面
         bookmarksArray.sort((a, b) => {
-          // 确保 createdAt 存在，如果不存在则使用 addedAt 或 0
-          const timeA = a.createdAt || a.addedAt || 0;
-          const timeB = b.createdAt || b.addedAt || 0;
+          const timeA = a.addedAt || a.createdAt || 0;
+          const timeB = b.addedAt || b.createdAt || 0;
           return timeB - timeA;
         });
         
         setBookmarks(bookmarksArray);
-        setFilteredBookmarks(bookmarksArray);
       } else {
         setBookmarks([]);
-        setFilteredBookmarks([]);
       }
     } catch (error) {
       console.error('Error fetching bookmarks:', error);
       toast({
         title: "获取书签失败",
-        description: "请检查您的网络连接并重试",
-        variant: "destructive"
+        description: "请稍后再试",
+        variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
   }, [user]);
 
+  // 初始加载
+  useEffect(() => {
+    if (user) {
+      fetchBookmarks();
+    }
+  }, [user, fetchBookmarks]);
+
   // 删除书签
-  const deleteBookmark = async (id: string) => {
-    if (!user) return;
+  const handleDeleteBookmark = async (bookmarkId: string) => {
+    if (!user || isDeleting) return;
     
     try {
       setIsDeleting(true);
       
-      // 从数据库中删除书签 - 修复路径，添加额外的 bookmarks 层级      
-      const bookmarkRef = ref(db, `users/${user.uid}/bookmarks/bookmarks/${id}`);
-      
-      // 检查书签是否存在
+      // 获取书签数据，检查是否有PDF需要删除
+      const bookmarkRef = ref(db, `users/${user.uid}/bookmarks/bookmarks/${bookmarkId}`);
       const snapshot = await get(bookmarkRef);
-      if (!snapshot.exists()) {
-        console.error(`书签不存在: ${id}`);
-        toast({
-          title: "删除失败",
-          description: "找不到要删除的书签",
-          variant: "destructive"
-        });
-        return;
-      }
       
-      // 获取书签数据，检查是否有关联的PDF文件需要删除
-      const bookmarkData = snapshot.val();
-      if (bookmarkData.pdfFiles) {
-        try {
-          // 删除所有关联的PDF文件
-          const filePromises = Object.values(bookmarkData.pdfFiles).map((file: any) => {
-            // 使用存储路径（如果有）或构建默认路径
-            const storagePath = file.storagePath || 
-                               `users/${user.uid}/bookmarks/bookmarks/${id}/${file.name}`;
-            const pdfRef = storageRef(storage, storagePath);
-            return deleteObject(pdfRef);
-          });
+      if (snapshot.exists()) {
+        const bookmarkData = snapshot.val();
+        
+        // 如果有PDF文件，先删除Storage中的文件
+        if (bookmarkData.pdfFiles) {
+          const storage = getStorage();
           
-          // 等待所有文件删除完成
-          await Promise.all(filePromises);
-        } catch (pdfError) {
-          console.error('删除PDF文件失败:', pdfError);
-          // 继续删除书签，即使PDF删除失败
+          for (const fileId in bookmarkData.pdfFiles) {
+            const fileData = bookmarkData.pdfFiles[fileId];
+            if (fileData.storagePath) {
+              try {
+                const fileRef = storageRef(storage, fileData.storagePath);
+                await deleteObject(fileRef);
+              } catch (error) {
+                console.error('Error deleting PDF file:', error);
+              }
+            }
+          }
         }
       }
       
-      // 执行删除操作
-      await remove(bookmarkRef);
+      // 删除书签数据
+      await remove(ref(db, `users/${user.uid}/bookmarks/bookmarks/${bookmarkId}`));
       
       // 更新本地状态
-      const updatedBookmarks = bookmarks.filter(bookmark => bookmark.id !== id);
-      setBookmarks(updatedBookmarks);
-      setFilteredBookmarks(updatedBookmarks);
-      
-      // 发布书签删除成功事件
-      eventService.publish(EVENTS.BOOKMARK_DELETED);
+      setBookmarks(prev => prev.filter(bookmark => bookmark.id !== bookmarkId));
       
       toast({
         title: "书签已删除",
-        description: "书签已成功从数据库中删除",
+        description: "书签已成功删除",
       });
+      
+      // 发布书签删除事件
+      eventService.publish(EVENTS.BOOKMARK_DELETED);
+      
     } catch (error) {
       console.error('Error deleting bookmark:', error);
-      
-      // 详细记录错误信息
-      if (error instanceof Error) {
-        console.error(`错误类型: ${error.name}`);
-        console.error(`错误消息: ${error.message}`);
-        console.error(`错误堆栈: ${error.stack}`);
-      }
-      
       toast({
         title: "删除书签失败",
-        description: "无法从数据库中删除书签，请检查控制台获取详细错误信息",
-        variant: "destructive"
+        description: "请稍后再试",
+        variant: "destructive",
       });
     } finally {
       setIsDeleting(false);
@@ -213,520 +171,411 @@ export default function BookmarkList() {
 
   // 处理PDF上传
   const handlePdfUpload = async (bookmarkId: string, file: File) => {
-    if (!user) return;
+    if (!user || isUploading) return;
     
     try {
-      setUploadingPdf(bookmarkId);
+      setIsUploading(true);
+      setUploadingBookmarkId(bookmarkId);
       setUploadProgress(0);
       
-      // 检查文件类型
-      if (file.type !== 'application/pdf') {
-        toast({
-          title: "文件类型错误",
-          description: "请上传PDF格式的文件",
-          variant: "destructive"
-        });
-        setUploadingPdf(null);
-        return;
-      }
+      const storage = getStorage();
+      const timestamp = Date.now();
+      const filePath = `users/${user.uid}/pdfs/${bookmarkId}/${timestamp}_${file.name}`;
+      const fileRef = storageRef(storage, filePath);
       
-      // 检查文件大小（限制为10MB）
-      const maxSize = 10 * 1024 * 1024; // 10MB
-      if (file.size > maxSize) {
-        toast({
-          title: "文件过大",
-          description: "PDF文件大小不能超过10MB",
-          variant: "destructive"
-        });
-        setUploadingPdf(null);
-        return;
-      }
-      
-      // 创建唯一的文件ID，避免文件名冲突
-      const fileId = `file_${Date.now()}`;
-      
-      // 处理文件名，避免中文文件名导致的问题
-      const originalFileName = file.name;
-      // 保留原始文件名用于显示，但为存储创建一个安全的文件名
-      const safeFileName = `${fileId}_${encodeURIComponent(originalFileName).replace(/%/g, '_')}`;
-      
-      // 创建存储引用 - 使用安全的文件名
-      const pdfRef = storageRef(storage, `users/${user.uid}/bookmarks/bookmarks/${bookmarkId}/${safeFileName}`);
-      
-      // 上传文件
-      const uploadTask = uploadBytesResumable(pdfRef, file);
+      // 创建上传任务
+      const uploadTask = uploadBytesResumable(fileRef, file);
       
       // 监听上传进度
       uploadTask.on('state_changed', 
         (snapshot) => {
-          // 计算上传进度
           const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
           setUploadProgress(progress);
         },
         (error) => {
-          // 处理错误
-          console.error('上传PDF失败:', error);
+          console.error('Error uploading PDF:', error);
           toast({
-            title: "上传失败",
-            description: "无法上传PDF文件，请重试",
-            variant: "destructive"
+            title: "上传PDF失败",
+            description: "请稍后再试",
+            variant: "destructive",
           });
-          setUploadingPdf(null);
+          setIsUploading(false);
+          setUploadingBookmarkId(null);
         },
         async () => {
-          try {
-            // 上传完成，获取下载URL
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            
-            // 获取当前时间戳
-            const timestamp = Date.now();
-            
-            // 获取书签引用
-            const bookmarkRef = ref(db, `users/${user.uid}/bookmarks/bookmarks/${bookmarkId}`);
-            
-            // 获取当前书签数据
-            const snapshot = await get(bookmarkRef);
-            if (!snapshot.exists()) {
-              throw new Error('书签不存在');
-            }
-            
+          // 上传完成，获取下载URL
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          
+          // 更新书签数据，添加PDF信息
+          const bookmarkRef = ref(db, `users/${user.uid}/bookmarks/bookmarks/${bookmarkId}`);
+          const snapshot = await get(bookmarkRef);
+          
+          if (snapshot.exists()) {
             const bookmarkData = snapshot.val();
+            const pdfFiles = bookmarkData.pdfFiles || {};
+            const newFileId = `pdf_${timestamp}`;
             
-            // 准备PDF文件数据 - 使用原始文件名用于显示
-            const pdfFileData = {
+            pdfFiles[newFileId] = {
               url: downloadURL,
-              name: originalFileName,
+              name: file.name,
               addedAt: timestamp,
-              storagePath: `users/${user.uid}/bookmarks/bookmarks/${bookmarkId}/${safeFileName}`
+              storagePath: filePath
             };
             
-            // 更新书签数据，添加PDF文件
-            // 如果已有pdfFiles字段，则添加新文件；否则创建新的pdfFiles对象
-            const updatedData = {
-              ...bookmarkData,
-              pdfFiles: {
-                ...(bookmarkData.pdfFiles || {}),
-                [fileId]: pdfFileData
-              }
-            };
-            
-            // 更新书签数据
-            await update(bookmarkRef, updatedData);
-            
-            // 更新bookmarks层级的lastUpdated字段
-            const bookmarksRef = ref(db, `users/${user.uid}/bookmarks/bookmarks`);
-            await update(bookmarksRef, {
-              lastUpdated: timestamp
-            });
+            // 更新数据库
+            await update(bookmarkRef, { pdfFiles });
             
             // 更新本地状态
-            setBookmarks(prevBookmarks => 
-              prevBookmarks.map(bookmark => 
-                bookmark.id === bookmarkId 
-                  ? { 
-                      ...bookmark, 
-                      pdfFiles: {
-                        ...(bookmark.pdfFiles || {}),
-                        [fileId]: pdfFileData
-                      }
-                    } 
-                  : bookmark
-              )
-            );
-            
-            setFilteredBookmarks(prevBookmarks => 
-              prevBookmarks.map(bookmark => 
-                bookmark.id === bookmarkId 
-                  ? { 
-                      ...bookmark, 
-                      pdfFiles: {
-                        ...(bookmark.pdfFiles || {}),
-                        [fileId]: pdfFileData
-                      }
-                    } 
-                  : bookmark
-              )
-            );
+            setBookmarks(prev => prev.map(bookmark => {
+              if (bookmark.id === bookmarkId) {
+                return {
+                  ...bookmark,
+                  pdfFiles: {
+                    ...bookmark.pdfFiles,
+                    [newFileId]: {
+                      url: downloadURL,
+                      name: file.name,
+                      addedAt: timestamp,
+                      storagePath: filePath
+                    }
+                  }
+                };
+              }
+              return bookmark;
+            }));
             
             toast({
-              title: "上传成功",
-              description: "PDF文件已成功上传并关联到书签",
+              title: "PDF上传成功",
+              description: `${file.name} 已成功上传`,
             });
-          } catch (innerError) {
-            console.error('处理上传后操作时出错:', innerError);
-            toast({
-              title: "上传后处理失败",
-              description: "文件已上传但无法更新数据库，请刷新页面",
-              variant: "destructive"
-            });
-          } finally {
-            setUploadingPdf(null);
           }
+          
+          setIsUploading(false);
+          setUploadingBookmarkId(null);
         }
       );
+      
     } catch (error) {
-      console.error('处理PDF上传时出错:', error);
+      console.error('Error handling PDF upload:', error);
       toast({
-        title: "上传失败",
-        description: "处理PDF上传时出错，请重试",
-        variant: "destructive"
+        title: "上传PDF失败",
+        description: "请稍后再试",
+        variant: "destructive",
       });
-      setUploadingPdf(null);
+      setIsUploading(false);
+      setUploadingBookmarkId(null);
     }
   };
-  
+
   // 删除PDF文件
   const deletePdf = async (bookmarkId: string, fileId: string, fileName: string) => {
-    if (!user) return;
+    if (!user || isDeleting) return;
     
     try {
-      // 获取书签引用
+      setIsDeleting(true);
+      
+      // 获取书签数据
       const bookmarkRef = ref(db, `users/${user.uid}/bookmarks/bookmarks/${bookmarkId}`);
-      
-      // 获取当前书签数据
       const snapshot = await get(bookmarkRef);
-      if (!snapshot.exists()) {
-        throw new Error('书签不存在');
+      
+      if (snapshot.exists()) {
+        const bookmarkData = snapshot.val();
+        
+        if (bookmarkData.pdfFiles && bookmarkData.pdfFiles[fileId]) {
+          const fileData = bookmarkData.pdfFiles[fileId];
+          
+          // 如果有存储路径，删除Storage中的文件
+          if (fileData.storagePath) {
+            const storage = getStorage();
+            const fileRef = storageRef(storage, fileData.storagePath);
+            await deleteObject(fileRef);
+          }
+          
+          // 从书签数据中删除PDF信息
+          const updatedPdfFiles = { ...bookmarkData.pdfFiles };
+          delete updatedPdfFiles[fileId];
+          
+          // 更新数据库
+          await update(bookmarkRef, { pdfFiles: updatedPdfFiles });
+          
+          // 更新本地状态
+          setBookmarks(prev => prev.map(bookmark => {
+            if (bookmark.id === bookmarkId && bookmark.pdfFiles) {
+              const newPdfFiles = { ...bookmark.pdfFiles };
+              delete newPdfFiles[fileId];
+              return {
+                ...bookmark,
+                pdfFiles: newPdfFiles
+              };
+            }
+            return bookmark;
+          }));
+          
+          toast({
+            title: "PDF已删除",
+            description: `${fileName} 已成功删除`,
+          });
+        }
       }
       
-      const bookmarkData = snapshot.val();
-      
-      // 如果没有pdfFiles字段或该文件不存在，则直接返回
-      if (!bookmarkData.pdfFiles || !bookmarkData.pdfFiles[fileId]) {
-        return;
-      }
-      
-      // 获取文件的存储路径
-      const storagePath = bookmarkData.pdfFiles[fileId].storagePath || 
-                          `users/${user.uid}/bookmarks/bookmarks/${bookmarkId}/${fileName}`;
-      
-      // 删除存储中的文件
-      const pdfRef = storageRef(storage, storagePath);
-      await deleteObject(pdfRef);
-      
-      // 获取当前时间戳
-      const timestamp = Date.now();
-      
-      // 创建新的pdfFiles对象，移除要删除的文件
-      const updatedPdfFiles = { ...bookmarkData.pdfFiles };
-      delete updatedPdfFiles[fileId];
-      
-      // 更新书签数据
-      await update(bookmarkRef, {
-        pdfFiles: Object.keys(updatedPdfFiles).length > 0 ? updatedPdfFiles : null
-      });
-      
-      // 更新bookmarks层级的lastUpdated字段
-      const bookmarksRef = ref(db, `users/${user.uid}/bookmarks/bookmarks`);
-      await update(bookmarksRef, {
-        lastUpdated: timestamp
-      });
-      
-      // 更新本地状态
-      setBookmarks(prevBookmarks => 
-        prevBookmarks.map(bookmark => {
-          if (bookmark.id === bookmarkId) {
-            const updatedBookmark = { ...bookmark };
-            if (updatedBookmark.pdfFiles) {
-              const newPdfFiles = { ...updatedBookmark.pdfFiles };
-              delete newPdfFiles[fileId];
-              updatedBookmark.pdfFiles = Object.keys(newPdfFiles).length > 0 ? newPdfFiles : undefined;
-            }
-            return updatedBookmark;
-          }
-          return bookmark;
-        })
-      );
-      
-      setFilteredBookmarks(prevBookmarks => 
-        prevBookmarks.map(bookmark => {
-          if (bookmark.id === bookmarkId) {
-            const updatedBookmark = { ...bookmark };
-            if (updatedBookmark.pdfFiles) {
-              const newPdfFiles = { ...updatedBookmark.pdfFiles };
-              delete newPdfFiles[fileId];
-              updatedBookmark.pdfFiles = Object.keys(newPdfFiles).length > 0 ? newPdfFiles : undefined;
-            }
-            return updatedBookmark;
-          }
-          return bookmark;
-        })
-      );
-      
-      toast({
-        title: "删除成功",
-        description: "PDF文件已成功删除",
-      });
     } catch (error) {
-      console.error('删除PDF时出错:', error);
+      console.error('Error deleting PDF:', error);
       toast({
-        title: "删除失败",
-        description: "无法删除PDF文件，请重试",
-        variant: "destructive"
+        title: "删除PDF失败",
+        description: "请稍后再试",
+        variant: "destructive",
       });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
-  // 获取当前页的书签
+  // 分页相关函数
+  const totalPages = Math.ceil(bookmarks.length / itemsPerPage);
+  
   const getCurrentPageBookmarks = () => {
-    const indexOfLastBookmark = currentPage * bookmarksPerPage;
-    const indexOfFirstBookmark = indexOfLastBookmark - bookmarksPerPage;
-    return filteredBookmarks.slice(indexOfFirstBookmark, indexOfLastBookmark);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return bookmarks.slice(startIndex, endIndex);
+  };
+  
+  const goToPage = (page: number) => {
+    setCurrentPage(page);
   };
 
-  // 计算总页数
-  const totalPages = Math.ceil(filteredBookmarks.length / bookmarksPerPage);
-
-  // 页码导航
-  const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
-
-  useEffect(() => {
-    if (user) {
-      fetchBookmarks();
+  // 格式化日期
+  const formatDate = (timestamp: number) => {
+    if (!timestamp) return '未知日期';
+    
+    // 检查时间戳是否为秒级（10位数），如果是则转换为毫秒级（13位数）
+    const normalizedTimestamp = timestamp.toString().length === 10 
+      ? timestamp * 1000 
+      : timestamp;
+    
+    const date = new Date(normalizedTimestamp);
+    return date.toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+  
+  // 在renderBookmarks函数中，修改书签卡片的渲染方式
+  // 添加一个函数来确定书签类型并返回对应的CSS类名
+  const getBookmarkCardClass = (bookmark: Bookmark) => {
+    const url = bookmark.url.toLowerCase();
+    const title = (bookmark.title || '').toLowerCase();
+    
+    // 开发工具类 - 紫色渐变
+    if (
+      url.includes('github.com') || 
+      url.includes('stackoverflow.com') || 
+      url.includes('vscode') || 
+      url.includes('code') ||
+      url.includes('dev.') ||
+      url.includes('translate.google') ||
+      title.includes('工具') ||
+      title.includes('翻译')
+    ) {
+      return 'card-gradient-purple';
     }
-  }, [user, fetchBookmarks]);
-
-  // 订阅书签导入成功事件
-  useEffect(() => {
-    // 定义事件处理函数
-    const handleBookmarksImported = () => {
-      fetchBookmarks();
-    };
     
-    // 订阅事件
-    eventService.subscribe(EVENTS.BOOKMARKS_IMPORTED, handleBookmarksImported);
+    // 人工智能类 - 橙色渐变
+    if (
+      url.includes('ai') || 
+      url.includes('openai') || 
+      url.includes('gpt') || 
+      url.includes('claude') ||
+      url.includes('llm') ||
+      url.includes('feishu') ||
+      title.includes('ai') ||
+      title.includes('人工智能') ||
+      title.includes('机器学习')
+    ) {
+      return 'card-gradient-orange';
+    }
     
-    // 组件卸载时取消订阅
-    return () => {
-      eventService.unsubscribe(EVENTS.BOOKMARKS_IMPORTED, handleBookmarksImported);
-    };
-  }, [fetchBookmarks]);
+    // 开发框架类 - 绿色渐变
+    if (
+      url.includes('react') || 
+      url.includes('vue') || 
+      url.includes('angular') || 
+      url.includes('next') ||
+      url.includes('framework') ||
+      url.includes('platform') ||
+      url.includes('kancloud') ||
+      title.includes('框架') ||
+      title.includes('platform')
+    ) {
+      return 'card-gradient-green';
+    }
+    
+    // 默认返回空字符串，使用默认样式
+    return '';
+  };
 
   if (loading) {
     return (
-      <div className="py-8 text-center">
-        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
-        <p className="mt-2 text-gray-500">加载书签中...</p>
+      <div className="flex justify-center items-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     );
   }
 
-  if (bookmarks.length === 0) {
-    return (
-      <div className="py-16 text-center">
-        <p className="text-gray-500 mb-4">您还没有添加任何书签</p>
-        <ImportButton />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* 书签列表 */}
-      {filteredBookmarks.length === 0 ? (
-        <div className="py-12 text-center bg-gray-50 rounded-lg">
-          <p className="text-gray-500">没有找到匹配的书签</p>
+  // 渲染书签列表
+  const renderBookmarks = () => {
+    if (bookmarks.length === 0) {
+      return (
+        <div className="text-center py-8">
+          <FileText className="h-12 w-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">还没有书签</h3>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">导入或添加您的第一个书签开始使用</p>
+          <div className="mt-4">
+            <ImportButton />
+          </div>
         </div>
-      ) : (
-        <>
-          <div className={`grid grid-cols-1 ${activeView === 'list' ? 'md:grid-cols-2 lg:grid-cols-3' : 'md:grid-cols-3 lg:grid-cols-4'} gap-4`}>
-            {getCurrentPageBookmarks().map((bookmark) => (
-              <div 
-                key={bookmark.id}
-                className="bg-white border border-gray-100 rounded-lg p-4 hover:shadow-md transition-shadow duration-200"
-              >
-                <div className="flex items-center">
-                  <div className="w-8 h-8 bg-gray-100 rounded-md flex items-center justify-center overflow-hidden mr-3 flex-shrink-0">
-                    {bookmark.favicon ? (
-                      <img 
-                        src={bookmark.favicon} 
-                        alt="" 
-                        className="w-full h-full object-contain"
-                        onError={(e) => {
-                          // 如果图标加载失败，显示默认图标
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
-                    ) : (
-                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                      </svg>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-gray-900 truncate">{bookmark.title || '无标题'}</h3>
-                    <p className="text-sm text-gray-500 truncate">{bookmark.url || '无链接'}</p>
-                  </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {getCurrentPageBookmarks().map(bookmark => {
+          const cardClass = getBookmarkCardClass(bookmark);
+          const hasGradient = cardClass !== '';
+          
+          return (
+            <div 
+              key={bookmark.id}
+              className={`rounded-xl p-6 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1 ${
+                hasGradient 
+                  ? cardClass 
+                  : 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 shadow-sm'
+              }`}
+            >
+              <div className="flex flex-col h-full">
+                {/* 标题区域 */}
+                <div className="mb-4">
+                  <h2 className={`text-xl font-bold leading-tight line-clamp-2 ${
+                    hasGradient ? 'text-white' : 'text-gray-900 dark:text-gray-100'
+                  }`}>
+                    {bookmark.title || '无标题'}
+                  </h2>
                 </div>
                 
+                {/* 描述区域 */}
                 {bookmark.description && (
-                  <p className="mt-2 text-sm text-gray-600 line-clamp-2">{bookmark.description}</p>
+                  <p className={`mb-4 text-sm line-clamp-3 ${
+                    hasGradient ? 'text-white/90' : 'text-gray-600 dark:text-gray-300'
+                  }`}>
+                    {bookmark.description}
+                  </p>
                 )}
                 
-                {bookmark.tags && bookmark.tags.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {bookmark.tags.map((tag, index) => (
-                      <span 
-                        key={index}
-                        className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                
-                {/* PDF上传和显示区域 */}
-                <div className="mt-3 pt-3 border-t border-gray-100">
-                  {bookmark.pdfFiles && Object.keys(bookmark.pdfFiles).length > 0 ? (
-                    <div className="flex flex-col space-y-2">
-                      {Object.entries(bookmark.pdfFiles).map(([fileId, fileData]) => (
-                        <div key={fileId} className="flex items-center justify-between">
-                          <div className="flex items-center text-sm text-blue-600 hover:text-blue-800">
-                            <FileText className="h-4 w-4 mr-1" />
-                            <a 
-                              href={fileData.url} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="truncate max-w-[150px]"
-                            >
-                              {fileData.name || 'PDF文档'}
-                            </a>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0 rounded-full text-gray-500 hover:text-red-600 hover:bg-red-50"
-                            onClick={() => deletePdf(bookmark.id, fileId, fileData.name)}
-                          >
-                            <Trash className="h-3 w-3" />
-                            <span className="sr-only">删除PDF</span>
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div>
-                      {uploadingPdf === bookmark.id ? (
-                        <div className="space-y-2">
-                          <Progress value={uploadProgress} className="h-2 w-full" />
-                          <p className="text-xs text-gray-500 text-center">上传中 {Math.round(uploadProgress)}%</p>
-                        </div>
-                      ) : (
-                        <label className="flex items-center justify-center p-2 border border-dashed border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="file"
-                            accept=".pdf"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) {
-                                handlePdfUpload(bookmark.id, file);
-                              }
+                {/* 底部信息区域 */}
+                <div className="mt-auto">
+                  {/* 分隔线 */}
+                  <div className={`border-t ${
+                    hasGradient ? 'border-white/20' : 'border-gray-100 dark:border-gray-700'
+                  } my-3`}></div>
+                  
+                  {/* 链接和操作区域 */}
+                  <div className="flex items-center justify-between">
+                    <a 
+                      href={bookmark.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className={`flex items-center ${
+                        hasGradient 
+                          ? 'text-white/90 hover:text-white' 
+                          : 'text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300'
+                      }`}
+                    >
+                      <div className="flex items-center">
+                        {bookmark.favicon ? (
+                          <img 
+                            src={bookmark.favicon} 
+                            alt="" 
+                            className="w-4 h-4 mr-2 rounded-sm"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = '/globe.svg';
                             }}
                           />
-                          <FileUp className="h-4 w-4 mr-1 text-gray-400" />
-                          <span className="text-xs text-gray-500">上传PDF</span>
-                        </label>
-                      )}
-                    </div>
-                  )}
-                </div>
-                
-                <div className="flex justify-between items-center mt-3">
-                  <span className="text-xs text-gray-400">
-                    {bookmark.createdAt ? new Date(bookmark.createdAt).toLocaleDateString() : '未知日期'}
-                  </span>
-                  <div className="flex items-center space-x-1">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-8 w-8 p-0 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-                      onClick={() => window.open(bookmark.url, '_blank')}
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                      <span className="sr-only">打开链接</span>
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-8 w-8 p-0 rounded-full text-gray-500 hover:text-red-600 hover:bg-red-50"
+                        ) : (
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                        )}
+                        <span className="text-sm truncate max-w-[150px]">
+                          {new URL(bookmark.url).hostname}
+                        </span>
+                      </div>
+                    </a>
+                    
+                    <button
                       onClick={() => setBookmarkToDelete(bookmark.id)}
-                      disabled={isDeleting}
+                      className={`p-1.5 rounded-full ${
+                        hasGradient 
+                          ? 'text-white/80 hover:text-white hover:bg-white/20' 
+                          : 'text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      }`}
                     >
                       <Trash className="h-4 w-4" />
-                      <span className="sr-only">删除</span>
-                    </Button>
+                    </button>
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
-          
-          {/* 分页控件 */}
-          {totalPages > 1 && (
-            <div className="flex justify-center mt-8">
-              <nav className="flex items-center space-x-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 w-8 p-0 rounded-md"
-                  disabled={currentPage === 1}
-                  onClick={() => paginate(currentPage - 1)}
-                >
-                  &laquo;
-                </Button>
-                
-                {[...Array(totalPages)].map((_, index) => {
-                  const pageNumber = index + 1;
-                  // 只显示当前页附近的页码
-                  if (
-                    pageNumber === 1 ||
-                    pageNumber === totalPages ||
-                    (pageNumber >= currentPage - 1 && pageNumber <= currentPage + 1)
-                  ) {
-                    return (
-                      <Button
-                        key={pageNumber}
-                        variant={pageNumber === currentPage ? "default" : "outline"}
-                        size="sm"
-                        className={`h-8 w-8 p-0 rounded-md ${
-                          pageNumber === currentPage
-                            ? "bg-blue-600 text-white"
-                            : "text-gray-700"
-                        }`}
-                        onClick={() => paginate(pageNumber)}
-                      >
-                        {pageNumber}
-                      </Button>
-                    );
-                  }
-                  
-                  // 显示省略号
-                  if (
-                    (pageNumber === currentPage - 2 && pageNumber > 1) ||
-                    (pageNumber === currentPage + 2 && pageNumber < totalPages)
-                  ) {
-                    return <span key={pageNumber} className="px-2">...</span>;
-                  }
-                  
-                  return null;
-                })}
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 w-8 p-0 rounded-md"
-                  disabled={currentPage === totalPages}
-                  onClick={() => paginate(currentPage + 1)}
-                >
-                  &raquo;
-                </Button>
-              </nav>
             </div>
-          )}
-        </>
-      )}
+          );
+        })}
+      </div>
+    );
+  };
+
+  // 渲染分页控件
+  const renderPagination = () => {
+    if (totalPages <= 1) return null;
+    
+    return (
+      <div className="flex justify-center mt-6">
+        <div className="flex space-x-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => goToPage(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="px-3"
+          >
+            上一页
+          </Button>
+          
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+            <Button
+              key={page}
+              variant={page === currentPage ? "default" : "outline"}
+              size="sm"
+              onClick={() => goToPage(page)}
+              className="px-3"
+            >
+              {page}
+            </Button>
+          ))}
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => goToPage(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="px-3"
+          >
+            下一页
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div>
+      {renderBookmarks()}
+      {renderPagination()}
       
       {/* 删除确认对话框 */}
       <AlertDialog open={!!bookmarkToDelete} onOpenChange={(open) => !open && setBookmarkToDelete(null)}>
@@ -734,28 +583,38 @@ export default function BookmarkList() {
           <AlertDialogHeader>
             <AlertDialogTitle>确认删除</AlertDialogTitle>
             <AlertDialogDescription>
-              您确定要删除这个书签吗？此操作无法撤销，书签将从数据库中永久删除。
+              您确定要删除这个书签吗？此操作无法撤销。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>取消</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => bookmarkToDelete && deleteBookmark(bookmarkToDelete)}
-              disabled={isDeleting}
-              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => bookmarkToDelete && handleDeleteBookmark(bookmarkToDelete)}
+              className="bg-red-600 hover:bg-red-700"
             >
-              {isDeleting ? (
-                <>
-                  <span className="mr-2">删除中</span>
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-solid border-white border-r-transparent"></div>
-                </>
-              ) : (
-                "删除"
-              )}
+              {isDeleting ? '删除中...' : '删除'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+      {/* 上传进度对话框 */}
+      {isUploading && (
+        <AlertDialog open={isUploading} onOpenChange={(open) => !open && setIsUploading(false)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>上传PDF</AlertDialogTitle>
+              <AlertDialogDescription>
+                正在上传文件，请稍候...
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="my-4">
+              <Progress value={uploadProgress} className="h-2" />
+              <p className="text-sm text-gray-500 mt-2 text-center">{Math.round(uploadProgress)}%</p>
+            </div>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 } 
