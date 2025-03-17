@@ -107,6 +107,18 @@ export default function BookmarkList() {
   useEffect(() => {
     if (user) {
       fetchBookmarks();
+      
+      // 订阅书签导入成功事件
+      const handleBookmarksImported = () => {
+        fetchBookmarks();
+      };
+      
+      eventService.subscribe(EVENTS.BOOKMARKS_IMPORTED, handleBookmarksImported);
+      
+      // 组件卸载时取消订阅
+      return () => {
+        eventService.unsubscribe(EVENTS.BOOKMARKS_IMPORTED, handleBookmarksImported);
+      };
     }
   }, [user, fetchBookmarks]);
 
