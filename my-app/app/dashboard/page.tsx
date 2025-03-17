@@ -36,7 +36,7 @@ function DashboardContent() {
       {/* 主内容区域 */}
       <div className="flex-1 flex flex-col">
         {/* Top Navigation Bar - 固定在顶部 */}
-        <nav className="sticky top-0 z-30 border-b border-gray-200 bg-white dark:bg-gray-800 dark:border-gray-700 shadow-sm p-2">
+        <nav className="sticky top-0 z-30 border-b border-gray-200 bg-transparent dark:border-gray-700 shadow-sm p-2">
           <div className="mx-auto flex items-center justify-between">
             <div className="flex items-center gap-3 flex-1 justify-center">
               <SearchBar />

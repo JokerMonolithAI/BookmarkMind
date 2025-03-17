@@ -26,7 +26,7 @@ export function SearchBar({ onSearch }: SearchBarProps) {
       <Input
         type="search"
         placeholder="搜索书签..."
-        className="pl-9 h-10 w-full border border-gray-200 dark:border-gray-700 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 focus:border-blue-500 dark:focus:border-blue-600 focus:outline-none transition-all duration-200"
+        className="pl-9 h-10 w-full border border-gray-200 dark:border-gray-700 rounded-md shadow-sm bg-transparent text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 focus:border-blue-500 dark:focus:border-blue-600 focus:outline-none transition-all duration-200"
         value={query}
         onChange={handleSearch}
       />
