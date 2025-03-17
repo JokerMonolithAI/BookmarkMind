@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2, Search, Check } from 'lucide-react';
-import { addBookmarkToCollection } from '@/lib/collectionService';
+import { addBookmarkToCollection, addBookmarksToCollection } from '@/lib/collectionService';
 import { getUserBookmarks, Bookmark } from '@/lib/bookmarkService';
 import { Button } from '@/components/ui/button';
 import {
@@ -129,12 +129,8 @@ export function AddBookmarkDialog({
       setIsSubmitting(true);
       setError('');
       
-      // 添加所有选中的书签到收藏集
-      const promises = selectedBookmarkIds.map(bookmarkId => 
-        addBookmarkToCollection(user.uid, collectionId, bookmarkId)
-      );
-      
-      await Promise.all(promises);
+      // 批量添加所有选中的书签到收藏集
+      await addBookmarksToCollection(user.uid, collectionId, selectedBookmarkIds);
       
       setSelectedBookmarkIds([]);
       setSearchQuery('');

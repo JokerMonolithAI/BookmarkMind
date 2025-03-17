@@ -450,4 +450,48 @@ export async function getBookmarkCollections(userId: string, bookmarkId: string)
     console.error('Error fetching bookmark collections:', error);
     throw error;
   }
+}
+
+// 批量添加书签到收藏集
+export async function addBookmarksToCollection(
+  userId: string, 
+  collectionId: string, 
+  bookmarkIds: string[]
+): Promise<void> {
+  try {
+    if (!bookmarkIds.length) return;
+    
+    // 检查收藏集是否存在
+    const collectionRef = ref(db, `users/${userId}/collections/${collectionId}`);
+    const collectionSnapshot = await get(collectionRef);
+    
+    if (!collectionSnapshot.exists()) {
+      throw new Error('Collection not found');
+    }
+    
+    const collection = collectionSnapshot.val();
+    const now = Date.now();
+    const updates: Record<string, any> = {};
+    
+    // 为每个书签创建收藏集关联
+    bookmarkIds.forEach(bookmarkId => {
+      updates[`users/${userId}/collection_bookmarks/${collectionId}/${bookmarkId}`] = {
+        collectionId,
+        bookmarkId,
+        addedAt: now
+      };
+    });
+    
+    // 更新收藏集的书签数量和更新时间
+    updates[`users/${userId}/collections/${collectionId}/bookmarkCount`] = 
+      (collection.bookmarkCount || 0) + bookmarkIds.length;
+    updates[`users/${userId}/collections/${collectionId}/updatedAt`] = now;
+    
+    // 批量更新数据库
+    await update(ref(db), updates);
+    
+  } catch (error) {
+    console.error('Error adding bookmarks to collection:', error);
+    throw error;
+  }
 } 
