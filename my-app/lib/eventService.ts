@@ -1,5 +1,5 @@
 // 简单的事件服务，用于组件间通信
-type EventCallback = () => void;
+type EventCallback = (data?: any) => void;
 
 class EventService {
   private events: Record<string, EventCallback[]> = {};
@@ -19,9 +19,9 @@ class EventService {
   }
 
   // 发布事件
-  publish(eventName: string): void {
+  publish(eventName: string, data?: any): void {
     if (!this.events[eventName]) return;
-    this.events[eventName].forEach(callback => callback());
+    this.events[eventName].forEach(callback => callback(data));
   }
 }
 
