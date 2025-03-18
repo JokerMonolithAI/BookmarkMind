@@ -516,79 +516,71 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
           return (
             <div 
               key={bookmark.id}
-              className={`rounded-xl p-6 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1 ${
-                hasGradient 
-                  ? cardClass 
-                  : 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 shadow-sm'
-              }`}
+              className="rounded-xl overflow-hidden border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
             >
               <div className="flex flex-col h-full">
-                {/* 标题区域 */}
-                <div className="mb-4">
-                  <h2 className={`text-xl font-bold leading-tight line-clamp-2 ${
-                    hasGradient ? 'text-white' : 'text-gray-900 dark:text-gray-100'
-                  }`}>
-                    {bookmark.title || '无标题'}
-                  </h2>
+                {/* 上半部分背景色区域 */}
+                <div className={`${hasGradient ? cardClass : 'bg-white dark:bg-gray-800'} p-6 h-32`}>
+                  {/* 标题区域 */}
+                  <div className="mb-2">
+                    <h2 className={`text-xl font-bold leading-tight line-clamp-2 ${
+                      hasGradient ? 'text-white' : 'text-gray-900 dark:text-gray-100'
+                    }`}>
+                      {bookmark.title || '无标题'}
+                    </h2>
+                  </div>
+                  
+                  {/* 描述区域 */}
+                  {bookmark.description && (
+                    <p className={`text-sm line-clamp-2 ${
+                      hasGradient ? 'text-white/90' : 'text-gray-600 dark:text-gray-300'
+                    }`}>
+                      {bookmark.description}
+                    </p>
+                  )}
                 </div>
                 
-                {/* 描述区域 */}
-                {bookmark.description && (
-                  <p className={`mb-4 text-sm line-clamp-3 ${
-                    hasGradient ? 'text-white/90' : 'text-gray-600 dark:text-gray-300'
-                  }`}>
-                    {bookmark.description}
-                  </p>
-                )}
-                
-                {/* 底部信息区域 */}
-                <div className="mt-auto">
-                  {/* 分隔线 */}
-                  <div className={`border-t ${
-                    hasGradient ? 'border-white/20' : 'border-gray-100 dark:border-gray-700'
-                  } my-3`}></div>
-                  
-                  {/* 链接和操作区域 */}
-                  <div className="flex items-center justify-between">
-                    <a 
-                      href={bookmark.url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className={`flex items-center ${
-                        hasGradient 
-                          ? 'text-white/90 hover:text-white' 
-                          : 'text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300'
-                      }`}
-                    >
-                      <div className="flex items-center">
-                        {bookmark.favicon ? (
-                          <img 
-                            src={bookmark.favicon} 
-                            alt="" 
-                            className="w-4 h-4 mr-2 rounded-sm"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = '/globe.svg';
-                            }}
-                          />
-                        ) : (
-                          <ExternalLink className="h-4 w-4 mr-2" />
-                        )}
-                        <span className="text-sm truncate max-w-[150px]">
-                          {new URL(bookmark.url).hostname}
-                        </span>
-                      </div>
-                    </a>
+                {/* 下半部分白色区域 */}
+                <div className="bg-white dark:bg-gray-800 p-6 pt-4 flex-grow">
+                  {/* 底部信息区域 */}
+                  <div className="mt-auto">
+                    {/* 分隔线 */}
+                    <div className="border-t border-gray-100 dark:border-gray-700 my-3"></div>
                     
-                    <button
-                      onClick={() => setBookmarkToDelete(bookmark.id)}
-                      className={`p-1.5 rounded-full ${
-                        hasGradient 
-                          ? 'text-white/80 hover:text-white hover:bg-white/20' 
-                          : 'text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                      }`}
-                    >
-                      <Trash className="h-4 w-4" />
-                    </button>
+                    {/* 链接和操作区域 */}
+                    <div className="flex items-center justify-between">
+                      <a 
+                        href={bookmark.url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="flex items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                      >
+                        <div className="flex items-center">
+                          {bookmark.favicon ? (
+                            <img 
+                              src={bookmark.favicon} 
+                              alt="" 
+                              className="w-4 h-4 mr-2 rounded-sm"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = '/globe.svg';
+                              }}
+                            />
+                          ) : (
+                            <ExternalLink className="h-4 w-4 mr-2" />
+                          )}
+                          <span className="text-sm truncate max-w-[150px]">
+                            {new URL(bookmark.url).hostname}
+                          </span>
+                        </div>
+                      </a>
+                      
+                      <button
+                        onClick={() => setBookmarkToDelete(bookmark.id)}
+                        className="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      >
+                        <Trash className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
