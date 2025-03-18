@@ -7,6 +7,7 @@ import { Suspense } from 'react'
 import { BookmarkStats } from '@/components/dashboard/BookmarkStats'
 import BookmarkList from '@/components/dashboard/BookmarkList'
 import CollectionsList from '@/components/dashboard/CollectionsList'
+import DashboardTagsList from '@/components/dashboard/DashboardTagsList'
 import ImportButton from '@/components/dashboard/ImportButton'
 import { ViewProvider, useView } from '@/components/dashboard/ViewToggle'
 import { SearchBar } from '@/components/dashboard/SearchBar'
@@ -84,6 +85,8 @@ function DashboardContent() {
                 <div className="p-4 max-h-[calc(100vh-280px)] overflow-y-auto">
                   {activeCategory === 'collections' ? (
                     <CollectionsList />
+                  ) : activeCategory === 'tags' ? (
+                    <DashboardTagsList />
                   ) : (
                     <BookmarkList />
                   )}
