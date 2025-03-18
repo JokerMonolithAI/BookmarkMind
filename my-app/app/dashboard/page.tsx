@@ -8,6 +8,7 @@ import { BookmarkStats } from '@/components/dashboard/BookmarkStats'
 import BookmarkList from '@/components/dashboard/BookmarkList'
 import CollectionsList from '@/components/dashboard/CollectionsList'
 import DashboardTagsList from '@/components/dashboard/DashboardTagsList'
+import TimelineView from '@/components/timeline/TimelineView'
 import ImportButton from '@/components/dashboard/ImportButton'
 import { ViewProvider, useView } from '@/components/dashboard/ViewToggle'
 import { SearchBar } from '@/components/dashboard/SearchBar'
@@ -25,9 +26,14 @@ type CategoryType = 'smart' | 'collections' | 'tags' | 'timeline';
 function DashboardContent() {
   const { activeView } = useView();
   const [activeCategory, setActiveCategory] = useState<CategoryType>('collections');
+  const [searchQuery, setSearchQuery] = useState('');
   
   const handleCategoryChange = (category: CategoryType) => {
     setActiveCategory(category);
+  };
+  
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
   };
   
   return (
@@ -41,7 +47,7 @@ function DashboardContent() {
         <nav className="sticky top-0 z-30 border-b border-gray-200 bg-transparent dark:border-gray-700 shadow-sm p-2">
           <div className="mx-auto flex items-center justify-between">
             <div className="flex items-center gap-3 flex-1 justify-center">
-              <SearchBar />
+              <SearchBar onSearch={handleSearch} />
             </div>
             
             <div className="flex items-center gap-2">
@@ -87,8 +93,10 @@ function DashboardContent() {
                     <CollectionsList />
                   ) : activeCategory === 'tags' ? (
                     <DashboardTagsList />
+                  ) : activeCategory === 'timeline' ? (
+                    <TimelineView searchQuery={searchQuery} />
                   ) : (
-                    <BookmarkList />
+                    <BookmarkList searchQuery={searchQuery} />
                   )}
                 </div>
               </Suspense>

@@ -44,10 +44,15 @@ interface Bookmark {
   };
 }
 
-export default function BookmarkList() {
+interface BookmarkListProps {
+  searchQuery?: string;
+}
+
+export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
   const { user } = useAuth();
   const { activeView } = useView();
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [filteredBookmarks, setFilteredBookmarks] = useState<Bookmark[]>([]);
   const [loading, setLoading] = useState(true);
   const [bookmarkToDelete, setBookmarkToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -60,12 +65,12 @@ export default function BookmarkList() {
   // 获取书签数据
   const fetchBookmarks = useCallback(async () => {
     if (!user) return;
-    
+
     try {
       setLoading(true);
       const bookmarksRef = ref(db, `users/${user.uid}/bookmarks/bookmarks`);
       const snapshot = await get(bookmarksRef);
-      
+
       if (snapshot.exists()) {
         const data = snapshot.val();
         const bookmarksArray: Bookmark[] = [];
@@ -79,17 +84,19 @@ export default function BookmarkList() {
             });
           }
         });
-        
+
         // 按添加时间排序，最新的在前面
         bookmarksArray.sort((a, b) => {
           const timeA = a.addedAt || a.createdAt || 0;
           const timeB = b.addedAt || b.createdAt || 0;
           return timeB - timeA;
         });
-        
+
         setBookmarks(bookmarksArray);
+        setFilteredBookmarks(bookmarksArray);
       } else {
         setBookmarks([]);
+        setFilteredBookmarks([]);
       }
     } catch (error) {
       console.error('Error fetching bookmarks:', error);
@@ -121,6 +128,36 @@ export default function BookmarkList() {
       };
     }
   }, [user, fetchBookmarks]);
+
+  // 订阅书签删除事件
+  useEffect(() => {
+    const handleBookmarkDeleted = () => {
+      fetchBookmarks();
+    };
+    
+    eventService.subscribe(EVENTS.BOOKMARK_DELETED, handleBookmarkDeleted);
+    
+    return () => {
+      eventService.unsubscribe(EVENTS.BOOKMARK_DELETED, handleBookmarkDeleted);
+    };
+  }, [user]);
+
+  // 处理搜索过滤
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredBookmarks(bookmarks);
+      return;
+    }
+
+    const lowercaseQuery = searchQuery.toLowerCase();
+    const filtered = bookmarks.filter(bookmark => 
+      bookmark.title?.toLowerCase().includes(lowercaseQuery) || 
+      bookmark.url.toLowerCase().includes(lowercaseQuery) ||
+      bookmark.description?.toLowerCase().includes(lowercaseQuery)
+    );
+
+    setFilteredBookmarks(filtered);
+  }, [searchQuery, bookmarks]);
 
   // 删除书签
   const handleDeleteBookmark = async (bookmarkId: string) => {
@@ -342,15 +379,14 @@ export default function BookmarkList() {
     }
   };
 
-  // 分页相关函数
-  const totalPages = Math.ceil(bookmarks.length / itemsPerPage);
-  
+  // 获取当前页的书签
   const getCurrentPageBookmarks = () => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
-    return bookmarks.slice(startIndex, endIndex);
+    return filteredBookmarks.slice(startIndex, endIndex);
   };
-  
+
+  // 处理翻页
   const goToPage = (page: number) => {
     setCurrentPage(page);
   };
@@ -434,21 +470,43 @@ export default function BookmarkList() {
     );
   }
 
+  // 如果书签为空
+  if (bookmarks.length === 0 && !loading) {
+    return (
+      <div className="text-center py-12">
+        <div className="flex justify-center mb-4">
+          <FileText className="h-12 w-12 text-gray-300 dark:text-gray-600" />
+        </div>
+        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+          您还没有添加任何书签
+        </h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto mb-6">
+          添加书签来组织和保存您的网页收藏
+        </p>
+        <ImportButton />
+      </div>
+    );
+  }
+
+  // 如果过滤后没有结果
+  if (filteredBookmarks.length === 0 && searchQuery && !loading) {
+    return (
+      <div className="text-center py-12">
+        <div className="flex justify-center mb-4">
+          <FileText className="h-12 w-12 text-gray-300 dark:text-gray-600" />
+        </div>
+        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+          没有找到匹配的书签
+        </h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+          尝试其他搜索词或浏览所有书签
+        </p>
+      </div>
+    );
+  }
+
   // 渲染书签列表
   const renderBookmarks = () => {
-    if (bookmarks.length === 0) {
-      return (
-        <div className="text-center py-8">
-          <FileText className="h-12 w-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">还没有书签</h3>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">导入或添加您的第一个书签开始使用</p>
-          <div className="mt-4">
-            <ImportButton />
-          </div>
-        </div>
-      );
-    }
-
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {getCurrentPageBookmarks().map(bookmark => {
@@ -543,7 +601,7 @@ export default function BookmarkList() {
 
   // 渲染分页控件
   const renderPagination = () => {
-    if (totalPages <= 1) return null;
+    if (filteredBookmarks.length <= itemsPerPage) return null;
     
     return (
       <div className="flex justify-center mt-6">
@@ -558,7 +616,7 @@ export default function BookmarkList() {
             上一页
           </Button>
           
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+          {Array.from({ length: Math.ceil(filteredBookmarks.length / itemsPerPage) }, (_, i) => i + 1).map(page => (
             <Button
               key={page}
               variant={page === currentPage ? "default" : "outline"}
@@ -574,7 +632,7 @@ export default function BookmarkList() {
             variant="outline"
             size="sm"
             onClick={() => goToPage(currentPage + 1)}
-            disabled={currentPage === totalPages}
+            disabled={currentPage === Math.ceil(filteredBookmarks.length / itemsPerPage)}
             className="px-3"
           >
             下一页

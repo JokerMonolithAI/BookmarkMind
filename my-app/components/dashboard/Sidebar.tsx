@@ -112,7 +112,7 @@ export function Sidebar() {
         <NavItem href="/bookmarks" icon={<Bookmark className="h-5 w-5" />}>所有书签</NavItem>
         <NavItem href="/collections" icon={<FolderHeart className="h-5 w-5" />}>收藏集</NavItem>
         <NavItem href="/tags" icon={<LucideTag className="h-5 w-5" />}>标签</NavItem>
-        <NavItem href="/recent" icon={<Clock className="h-5 w-5" />}>最近添加</NavItem>
+        <NavItem href="/recent" icon={<Clock className="h-5 w-5" />}>时间线</NavItem>
         <NavItem href="/smart" icon={<Brain className="h-5 w-5" />}>智能分类</NavItem>
         <NavItem href="/stats" icon={<BarChart className="h-5 w-5" />}>统计分析</NavItem>
         <NavItem href="/mindmap" icon={<Brain className="h-5 w-5" />}>知识图谱</NavItem>
