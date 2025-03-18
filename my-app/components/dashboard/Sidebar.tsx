@@ -7,11 +7,13 @@ import { usePathname } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import { db } from '@/lib/firebase'
 import { ref, get } from 'firebase/database'
+import { getUserCollections, Collection } from '@/lib/collectionService'
+import { getUserTags, Tag } from '@/lib/tagService'
 import { 
   Home, 
   Bookmark, 
   FolderHeart, 
-  Tag, 
+  Tag as LucideTag, 
   Clock, 
   Brain, 
   BarChart, 
@@ -21,23 +23,13 @@ import {
   Hash
 } from 'lucide-react'
 
-interface Collection {
-  id: string;
-  name: string;
-  count: number;
-}
-
-interface TagItem {
-  id: string;
-  name: string;
-  count: number;
-}
-
 export function Sidebar() {
   const pathname = usePathname()
   const { user } = useAuth()
   const [collections, setCollections] = useState<Collection[]>([])
-  const [tags, setTags] = useState<TagItem[]>([])
+  const [isLoadingCollections, setIsLoadingCollections] = useState(false)
+  const [tags, setTags] = useState<Tag[]>([])
+  const [isLoadingTags, setIsLoadingTags] = useState(false)
   const [collectionsOpen, setCollectionsOpen] = useState(true)
   const [tagsOpen, setTagsOpen] = useState(true)
 
@@ -47,15 +39,14 @@ export function Sidebar() {
 
     const fetchCollections = async () => {
       try {
-        // 这里是模拟数据，实际项目中应该从数据库获取
-        const mockCollections = [
-          { id: 'dev-resources', name: '开发资源', count: 8 },
-          { id: 'learning', name: '学习资料', count: 5 },
-          { id: 'work', name: '工作项目', count: 12 }
-        ]
-        setCollections(mockCollections)
+        setIsLoadingCollections(true)
+        // 使用collectionService中的getUserCollections函数获取真实数据
+        const userCollections = await getUserCollections(user.uid)
+        setCollections(userCollections)
       } catch (error) {
         console.error('Error fetching collections:', error)
+      } finally {
+        setIsLoadingCollections(false)
       }
     }
 
@@ -68,15 +59,14 @@ export function Sidebar() {
 
     const fetchTags = async () => {
       try {
-        // 这里是模拟数据，实际项目中应该从数据库获取
-        const mockTags = [
-          { id: 'dev', name: '开发', count: 15 },
-          { id: 'ai', name: 'AI', count: 7 },
-          { id: 'tools', name: '工具', count: 10 }
-        ]
-        setTags(mockTags)
+        setIsLoadingTags(true)
+        // 使用tagService中的getUserTags函数获取真实数据
+        const userTags = await getUserTags(user.uid)
+        setTags(userTags)
       } catch (error) {
         console.error('Error fetching tags:', error)
+      } finally {
+        setIsLoadingTags(false)
       }
     }
 
@@ -121,7 +111,7 @@ export function Sidebar() {
         <NavItem href="/dashboard" icon={<Home className="h-5 w-5" />}>主页</NavItem>
         <NavItem href="/bookmarks" icon={<Bookmark className="h-5 w-5" />}>所有书签</NavItem>
         <NavItem href="/collections" icon={<FolderHeart className="h-5 w-5" />}>收藏集</NavItem>
-        <NavItem href="/tags" icon={<Tag className="h-5 w-5" />}>标签</NavItem>
+        <NavItem href="/tags" icon={<LucideTag className="h-5 w-5" />}>标签</NavItem>
         <NavItem href="/recent" icon={<Clock className="h-5 w-5" />}>最近添加</NavItem>
         <NavItem href="/smart" icon={<Brain className="h-5 w-5" />}>智能分类</NavItem>
         <NavItem href="/stats" icon={<BarChart className="h-5 w-5" />}>统计分析</NavItem>
@@ -143,19 +133,25 @@ export function Sidebar() {
           
           {collectionsOpen && (
             <div className="mt-1 pl-2 space-y-1">
-              {collections.map(collection => (
-                <Link
-                  key={collection.id}
-                  href={`/collections/${collection.id}`}
-                  className="flex items-center justify-between px-3 py-1.5 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-                >
-                  <div className="flex items-center gap-2">
-                    <FolderOpen className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-                    <span>{collection.name}</span>
-                  </div>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">{collection.count}</span>
-                </Link>
-              ))}
+              {isLoadingCollections ? (
+                <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">加载中...</div>
+              ) : collections.length > 0 ? (
+                collections.map(collection => (
+                  <Link
+                    key={collection.id}
+                    href={`/collections/${collection.id}`}
+                    className="flex items-center justify-between px-3 py-1.5 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                  >
+                    <div className="flex items-center gap-2">
+                      <FolderOpen className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                      <span>{collection.name}</span>
+                    </div>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{collection.bookmarkCount}</span>
+                  </Link>
+                ))
+              ) : (
+                <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">暂无收藏集</div>
+              )}
             </div>
           )}
         </div>
@@ -176,19 +172,25 @@ export function Sidebar() {
           
           {tagsOpen && (
             <div className="mt-1 pl-2 space-y-1">
-              {tags.map(tag => (
-                <Link
-                  key={tag.id}
-                  href={`/tags/${tag.id}`}
-                  className="flex items-center justify-between px-3 py-1.5 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-                >
-                  <div className="flex items-center gap-2">
-                    <Hash className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-                    <span>{tag.name}</span>
-                  </div>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">{tag.count}</span>
-                </Link>
-              ))}
+              {isLoadingTags ? (
+                <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">加载中...</div>
+              ) : tags.length > 0 ? (
+                tags.map(tag => (
+                  <Link
+                    key={tag.id}
+                    href={`/tags/${tag.id}`}
+                    className="flex items-center justify-between px-3 py-1.5 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Hash className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                      <span>{tag.name}</span>
+                    </div>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{tag.count}</span>
+                  </Link>
+                ))
+              ) : (
+                <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">暂无标签</div>
+              )}
             </div>
           )}
         </div>
