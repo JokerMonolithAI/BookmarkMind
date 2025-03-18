@@ -25,7 +25,7 @@ type CategoryType = 'smart' | 'collections' | 'tags' | 'timeline';
 // 创建一个内容组件，使用视图上下文
 function DashboardContent() {
   const { activeView } = useView();
-  const [activeCategory, setActiveCategory] = useState<CategoryType>('collections');
+  const [activeCategory, setActiveCategory] = useState<CategoryType>('smart');
   const [searchQuery, setSearchQuery] = useState('');
   
   const handleCategoryChange = (category: CategoryType) => {
