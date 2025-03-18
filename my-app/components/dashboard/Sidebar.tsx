@@ -109,13 +109,11 @@ export function Sidebar() {
       {/* 导航菜单 */}
       <div className="flex-1 overflow-y-auto p-3 space-y-1">
         <NavItem href="/dashboard" icon={<Home className="h-5 w-5" />}>主页</NavItem>
+        <NavItem href="/mindmap" icon={<Brain className="h-5 w-5" />}>知识图谱</NavItem>
         <NavItem href="/bookmarks" icon={<Bookmark className="h-5 w-5" />}>所有书签</NavItem>
         <NavItem href="/collections" icon={<FolderHeart className="h-5 w-5" />}>收藏集</NavItem>
         <NavItem href="/tags" icon={<LucideTag className="h-5 w-5" />}>标签</NavItem>
-        <NavItem href="/recent" icon={<Clock className="h-5 w-5" />}>时间线</NavItem>
-        <NavItem href="/smart" icon={<Brain className="h-5 w-5" />}>智能分类</NavItem>
-        <NavItem href="/stats" icon={<BarChart className="h-5 w-5" />}>统计分析</NavItem>
-        <NavItem href="/mindmap" icon={<Brain className="h-5 w-5" />}>知识图谱</NavItem>
+        <NavItem href="/recent" icon={<Clock className="h-5 w-5" />}>时间线</NavItem>       
         
         {/* 收藏集 */}
         <div className="mt-6">

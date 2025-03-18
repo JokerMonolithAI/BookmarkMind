@@ -9,6 +9,9 @@ import { ref, get, remove } from 'firebase/database';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { useView } from '@/components/bookmarks/ViewToggle';
+import { Tag, getBookmarkTags } from '@/lib/tagService';
+import { getBookmarkCollections } from '@/lib/collectionService';
+import { Badge } from '@/components/ui/badge';
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +43,15 @@ interface Bookmark {
   };
 }
 
+// 添加书签元数据接口
+interface BookmarkMetadata {
+  tags: Tag[];
+  collections: {
+    id: string;
+    name: string;
+  }[];
+}
+
 interface BookmarkListProps {
   searchQuery?: string;
   sortOption?: 'date' | 'title';
@@ -60,6 +72,9 @@ export default function BookmarkList({
   const [isDeleting, setIsDeleting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(12);
+  // 添加标签和收藏集的状态
+  const [bookmarkMetadata, setBookmarkMetadata] = useState<{[key: string]: BookmarkMetadata}>({});
+  const [loadingMetadata, setLoadingMetadata] = useState<{[key: string]: boolean}>({});
 
   // 获取书签数据
   const fetchBookmarks = useCallback(async () => {
@@ -249,6 +264,65 @@ export default function BookmarkList({
     setCurrentPage(page);
   };
 
+  // 获取书签的标签和收藏集
+  const fetchBookmarkMetadata = useCallback(async (bookmarkId: string) => {
+    if (!user || loadingMetadata[bookmarkId]) return;
+    
+    setLoadingMetadata(prev => ({ ...prev, [bookmarkId]: true }));
+    
+    try {
+      // 获取书签的标签
+      const tags = await getBookmarkTags(user.uid, bookmarkId);
+      
+      // 获取书签所属的收藏集
+      const collectionIds = await getBookmarkCollections(user.uid, bookmarkId);
+      
+      // 获取收藏集名称
+      const collections: {id: string, name: string}[] = [];
+      
+      if (collectionIds.length > 0) {
+        for (const id of collectionIds) {
+          const collectionRef = ref(db, `users/${user.uid}/collections/${id}`);
+          const snapshot = await get(collectionRef);
+          
+          if (snapshot.exists()) {
+            collections.push({
+              id,
+              name: snapshot.val().name
+            });
+          }
+        }
+      }
+      
+      // 更新状态
+      setBookmarkMetadata(prev => ({
+        ...prev,
+        [bookmarkId]: { tags, collections }
+      }));
+    } catch (error) {
+      console.error('Error fetching bookmark metadata:', error);
+      // 即使出错也更新状态，避免重复请求
+      setBookmarkMetadata(prev => ({
+        ...prev,
+        [bookmarkId]: { tags: [], collections: [] }
+      }));
+    } finally {
+      setLoadingMetadata(prev => ({ ...prev, [bookmarkId]: false }));
+    }
+  }, [user, loadingMetadata]);
+
+  // 在 useEffect 中预加载当前页的书签元数据
+  useEffect(() => {
+    if (!user || !filteredBookmarks.length) return;
+
+    const currentPageBookmarks = getCurrentPageBookmarks();
+    currentPageBookmarks.forEach(bookmark => {
+      if (!bookmarkMetadata[bookmark.id] && !loadingMetadata[bookmark.id]) {
+        fetchBookmarkMetadata(bookmark.id);
+      }
+    });
+  }, [user, filteredBookmarks, currentPage, bookmarkMetadata, loadingMetadata, fetchBookmarkMetadata]);
+
   // 格式化日期
   const formatDate = (timestamp: number) => {
     if (!timestamp) return '未知日期';
@@ -319,6 +393,65 @@ export default function BookmarkList({
     return '';
   };
 
+  // 渲染标签
+  const renderTags = (bookmarkId: string) => {
+    const metadata = bookmarkMetadata[bookmarkId];
+    
+    if (!metadata || metadata.tags.length === 0) {
+      return null;
+    }
+    
+    return (
+      <div className="flex flex-wrap gap-1 mt-1.5">
+        {metadata.tags.slice(0, 3).map(tag => (
+          <Badge 
+            key={tag.id}
+            style={{ 
+              backgroundColor: tag.bgColor,
+              color: tag.textColor
+            }}
+            className="text-xs px-1.5 py-0.5 h-4"
+          >
+            {tag.name}
+          </Badge>
+        ))}
+        {metadata.tags.length > 3 && (
+          <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-4">
+            +{metadata.tags.length - 3}
+          </Badge>
+        )}
+      </div>
+    );
+  };
+  
+  // 渲染收藏集
+  const renderCollections = (bookmarkId: string) => {
+    const metadata = bookmarkMetadata[bookmarkId];
+    
+    if (!metadata || metadata.collections.length === 0) {
+      return null;
+    }
+    
+    return (
+      <div className="flex flex-wrap gap-1 mt-1">
+        {metadata.collections.slice(0, 2).map(collection => (
+          <Badge 
+            key={collection.id}
+            variant="secondary"
+            className="text-xs px-1.5 py-0.5 h-4"
+          >
+            {collection.name}
+          </Badge>
+        ))}
+        {metadata.collections.length > 2 && (
+          <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-4">
+            +{metadata.collections.length - 2}
+          </Badge>
+        )}
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
@@ -345,9 +478,11 @@ export default function BookmarkList({
       );
     }
 
+    const currentPageBookmarks = getCurrentPageBookmarks();
+
     return (
       <div className={`grid grid-cols-1 ${activeView === 'grid' ? 'md:grid-cols-3 lg:grid-cols-4' : ''} gap-4`}>
-        {getCurrentPageBookmarks().map(bookmark => {
+        {currentPageBookmarks.map(bookmark => {
           const cardClass = getBookmarkCardClass(bookmark);
           const hasGradient = cardClass !== '';
           
@@ -391,6 +526,10 @@ export default function BookmarkList({
                         {bookmark.description}
                       </p>
                     )}
+                    
+                    {/* 添加标签和收藏集展示 */}
+                    {renderTags(bookmark.id)}
+                    {renderCollections(bookmark.id)}
                     
                     <div className="flex items-center justify-between mt-1">
                       <a 
@@ -451,6 +590,10 @@ export default function BookmarkList({
                 
                 {/* 下半部分白色区域 - 减小内边距 */}
                 <div className="bg-white dark:bg-gray-800 p-3 flex-grow">
+                  {/* 添加标签和收藏集展示 */}
+                  {renderTags(bookmark.id)}
+                  {renderCollections(bookmark.id)}
+                  
                   {/* 底部信息区域 */}
                   <div className="mt-auto">
                     {/* 分隔线 */}

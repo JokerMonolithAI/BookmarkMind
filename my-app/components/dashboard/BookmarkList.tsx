@@ -23,6 +23,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
+// 导入标签和收藏集相关功能
+import { Tag, getBookmarkTags } from '@/lib/tagService';
+import { getBookmarkCollections } from '@/lib/collectionService';
+import { Badge } from '@/components/ui/badge';
 
 // 在本地定义 Bookmark 接口，添加PDF相关字段
 interface Bookmark {
@@ -44,6 +48,15 @@ interface Bookmark {
   };
 }
 
+// 添加书签元数据接口
+interface BookmarkMetadata {
+  tags: Tag[];
+  collections: {
+    id: string;
+    name: string;
+  }[];
+}
+
 interface BookmarkListProps {
   searchQuery?: string;
 }
@@ -61,6 +74,9 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(12);
+  // 添加标签和收藏集的状态
+  const [bookmarkMetadata, setBookmarkMetadata] = useState<{[key: string]: BookmarkMetadata}>({});
+  const [loadingMetadata, setLoadingMetadata] = useState<{[key: string]: boolean}>({});
 
   // 获取书签数据
   const fetchBookmarks = useCallback(async () => {
@@ -379,6 +395,65 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
     }
   };
 
+  // 获取书签的标签和收藏集
+  const fetchBookmarkMetadata = useCallback(async (bookmarkId: string) => {
+    if (!user || loadingMetadata[bookmarkId]) return;
+    
+    setLoadingMetadata(prev => ({ ...prev, [bookmarkId]: true }));
+    
+    try {
+      // 获取书签的标签
+      const tags = await getBookmarkTags(user.uid, bookmarkId);
+      
+      // 获取书签所属的收藏集
+      const collectionIds = await getBookmarkCollections(user.uid, bookmarkId);
+      
+      // 获取收藏集名称
+      const collections: {id: string, name: string}[] = [];
+      
+      if (collectionIds.length > 0) {
+        for (const id of collectionIds) {
+          const collectionRef = ref(db, `users/${user.uid}/collections/${id}`);
+          const snapshot = await get(collectionRef);
+          
+          if (snapshot.exists()) {
+            collections.push({
+              id,
+              name: snapshot.val().name
+            });
+          }
+        }
+      }
+      
+      // 更新状态
+      setBookmarkMetadata(prev => ({
+        ...prev,
+        [bookmarkId]: { tags, collections }
+      }));
+    } catch (error) {
+      console.error('Error fetching bookmark metadata:', error);
+      // 即使出错也更新状态，避免重复请求
+      setBookmarkMetadata(prev => ({
+        ...prev,
+        [bookmarkId]: { tags: [], collections: [] }
+      }));
+    } finally {
+      setLoadingMetadata(prev => ({ ...prev, [bookmarkId]: false }));
+    }
+  }, [user, loadingMetadata]);
+
+  // 在 useEffect 中预加载当前页的书签元数据
+  useEffect(() => {
+    if (!user || !filteredBookmarks.length) return;
+
+    const currentPageBookmarks = getCurrentPageBookmarks();
+    currentPageBookmarks.forEach(bookmark => {
+      if (!bookmarkMetadata[bookmark.id] && !loadingMetadata[bookmark.id]) {
+        fetchBookmarkMetadata(bookmark.id);
+      }
+    });
+  }, [user, filteredBookmarks, currentPage, bookmarkMetadata, loadingMetadata, fetchBookmarkMetadata]);
+
   // 获取当前页的书签
   const getCurrentPageBookmarks = () => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -462,6 +537,65 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
     return '';
   };
 
+  // 渲染标签
+  const renderTags = (bookmarkId: string) => {
+    const metadata = bookmarkMetadata[bookmarkId];
+    
+    if (!metadata || metadata.tags.length === 0) {
+      return null;
+    }
+    
+    return (
+      <div className="flex flex-wrap gap-1 mt-1.5 mb-2">
+        {metadata.tags.slice(0, 3).map(tag => (
+          <Badge 
+            key={tag.id}
+            style={{ 
+              backgroundColor: tag.bgColor,
+              color: tag.textColor
+            }}
+            className="text-xs px-1.5 py-0.5 h-4"
+          >
+            {tag.name}
+          </Badge>
+        ))}
+        {metadata.tags.length > 3 && (
+          <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-4">
+            +{metadata.tags.length - 3}
+          </Badge>
+        )}
+      </div>
+    );
+  };
+  
+  // 渲染收藏集
+  const renderCollections = (bookmarkId: string) => {
+    const metadata = bookmarkMetadata[bookmarkId];
+    
+    if (!metadata || metadata.collections.length === 0) {
+      return null;
+    }
+    
+    return (
+      <div className="flex flex-wrap gap-1 mt-1 mb-2">
+        {metadata.collections.slice(0, 2).map(collection => (
+          <Badge 
+            key={collection.id}
+            variant="secondary"
+            className="text-xs px-1.5 py-0.5 h-4"
+          >
+            {collection.name}
+          </Badge>
+        ))}
+        {metadata.collections.length > 2 && (
+          <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-4">
+            +{metadata.collections.length - 2}
+          </Badge>
+        )}
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
@@ -542,6 +676,10 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
                 
                 {/* 下半部分白色区域 */}
                 <div className="bg-white dark:bg-gray-800 p-6 pt-4 flex-grow">
+                  {/* 添加标签和收藏集展示 */}
+                  {renderTags(bookmark.id)}
+                  {renderCollections(bookmark.id)}
+                  
                   {/* 底部信息区域 */}
                   <div className="mt-auto">
                     {/* 分隔线 */}
