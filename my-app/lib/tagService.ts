@@ -306,70 +306,116 @@ export async function deleteTag(userId: string, tagId: string): Promise<void> {
   }
 }
 
-// 获取标签相关的书签ID列表
+// 获取标签关联的所有书签ID
 export async function getTagBookmarks(userId: string, tagId: string): Promise<string[]> {
   try {
-    const bookmarksRef = ref(db, `users/${userId}/tag_bookmarks/${tagId}`);
-    const snapshot = await get(bookmarksRef);
+    // 查找所有与该标签关联的书签关系
+    const bookmarkTagsRef = ref(db, `users/${userId}/bookmarkTags`);
+    const snapshot = await get(bookmarkTagsRef);
     
     if (!snapshot.exists()) {
       return [];
     }
     
-    // 标签关联的书签存储结构应该是 { bookmarkId: true }
-    return Object.keys(snapshot.val());
+    const bookmarkTags = snapshot.val();
+    const bookmarkIds: string[] = [];
+    
+    // 遍历所有bookmarkTag关系，查找包含该tagId的记录
+    for (const key in bookmarkTags) {
+      if (key.endsWith(`_${tagId}`)) {
+        const bookmarkTag = bookmarkTags[key];
+        bookmarkIds.push(bookmarkTag.bookmarkId);
+      }
+    }
+    
+    return bookmarkIds;
   } catch (error) {
     console.error('Error fetching tag bookmarks:', error);
     throw error;
   }
 }
 
-// 为书签添加标签
+// 为单个书签添加标签
 export async function addTagToBookmark(userId: string, tagId: string, bookmarkId: string): Promise<void> {
   try {
-    const now = Date.now();
-    
-    // 添加标签到书签关联
-    await set(ref(db, `users/${userId}/tag_bookmarks/${tagId}/${bookmarkId}`), true);
-    
-    // 更新标签使用计数
+    // 检查标签是否存在
     const tagRef = ref(db, `users/${userId}/tags/${tagId}`);
     const tagSnapshot = await get(tagRef);
     
-    if (tagSnapshot.exists()) {
-      const tagData = tagSnapshot.val();
-      const count = (tagData.count || 0) + 1;
-      
-      await update(tagRef, {
-        count,
-        updatedAt: now
-      });
+    if (!tagSnapshot.exists()) {
+      throw new Error('标签不存在');
     }
+    
+    const now = Date.now();
+    
+    // 检查书签和标签的关联是否已存在
+    const bookmarkTagRef = ref(db, `users/${userId}/bookmarkTags/${bookmarkId}_${tagId}`);
+    const bookmarkTagSnapshot = await get(bookmarkTagRef);
+    
+    // 如果关联已存在，则不需要再次添加
+    if (bookmarkTagSnapshot.exists()) {
+      return;
+    }
+    
+    // 创建书签和标签的关联
+    const bookmarkTagData: BookmarkTag = {
+      bookmarkId,
+      tagId,
+      userId,
+      addedAt: now
+    };
+    
+    // 增加标签的使用计数
+    const tagData = tagSnapshot.val();
+    const currentCount = tagData.count || 0;
+    
+    // 更新数据库
+    const updates: { [key: string]: any } = {};
+    updates[`users/${userId}/bookmarkTags/${bookmarkId}_${tagId}`] = bookmarkTagData;
+    updates[`users/${userId}/tags/${tagId}/count`] = currentCount + 1;
+    updates[`users/${userId}/tags/${tagId}/updatedAt`] = now;
+    
+    await update(ref(db), updates);
   } catch (error) {
     console.error('Error adding tag to bookmark:', error);
     throw error;
   }
 }
 
-// 从书签移除标签
+// 从书签中移除标签
 export async function removeTagFromBookmark(userId: string, tagId: string, bookmarkId: string): Promise<void> {
   try {
-    // 从关联表中移除
-    await remove(ref(db, `users/${userId}/tag_bookmarks/${tagId}/${bookmarkId}`));
-    
-    // 更新标签使用计数
+    // 检查标签是否存在
     const tagRef = ref(db, `users/${userId}/tags/${tagId}`);
     const tagSnapshot = await get(tagRef);
     
-    if (tagSnapshot.exists()) {
-      const tagData = tagSnapshot.val();
-      const count = Math.max((tagData.count || 0) - 1, 0); // 确保不会小于0
-      
-      await update(tagRef, {
-        count,
-        updatedAt: Date.now()
-      });
+    if (!tagSnapshot.exists()) {
+      throw new Error('标签不存在');
     }
+    
+    // 检查关联是否存在
+    const bookmarkTagRef = ref(db, `users/${userId}/bookmarkTags/${bookmarkId}_${tagId}`);
+    const bookmarkTagSnapshot = await get(bookmarkTagRef);
+    
+    // 如果关联不存在，则不需要执行删除操作
+    if (!bookmarkTagSnapshot.exists()) {
+      return;
+    }
+    
+    const now = Date.now();
+    
+    // 减少标签的使用计数
+    const tagData = tagSnapshot.val();
+    const currentCount = tagData.count || 0;
+    const newCount = Math.max(0, currentCount - 1); // 确保count不会小于0
+    
+    // 更新数据库
+    const updates: { [key: string]: any } = {};
+    updates[`users/${userId}/bookmarkTags/${bookmarkId}_${tagId}`] = null; // 删除关联
+    updates[`users/${userId}/tags/${tagId}/count`] = newCount;
+    updates[`users/${userId}/tags/${tagId}/updatedAt`] = now;
+    
+    await update(ref(db), updates);
   } catch (error) {
     console.error('Error removing tag from bookmark:', error);
     throw error;
@@ -379,29 +425,120 @@ export async function removeTagFromBookmark(userId: string, tagId: string, bookm
 // 获取书签的所有标签
 export async function getBookmarkTags(userId: string, bookmarkId: string): Promise<Tag[]> {
   try {
-    const tags = await getUserTags(userId);
-    const tagPromises = tags.map(async tag => {
-      const bookmarksRef = ref(db, `users/${userId}/tag_bookmarks/${tag.id}/${bookmarkId}`);
-      const snapshot = await get(bookmarksRef);
-      return snapshot.exists() ? tag : null;
-    });
+    // 获取所有书签标签关联
+    const bookmarkTagsRef = ref(db, `users/${userId}/bookmarkTags`);
+    const snapshot = await get(bookmarkTagsRef);
     
-    const tagResults = await Promise.all(tagPromises);
-    return tagResults.filter(tag => tag !== null) as Tag[];
+    if (!snapshot.exists()) {
+      return [];
+    }
+    
+    const bookmarkTags = snapshot.val();
+    const tagIds: string[] = [];
+    
+    // 查找与当前书签关联的所有标签
+    for (const key in bookmarkTags) {
+      if (key.startsWith(`${bookmarkId}_`)) {
+        const bookmarkTag = bookmarkTags[key];
+        tagIds.push(bookmarkTag.tagId);
+      }
+    }
+    
+    // 如果没有关联的标签，直接返回空数组
+    if (tagIds.length === 0) {
+      return [];
+    }
+    
+    // 获取所有标签的详细信息
+    const tags: Tag[] = [];
+    const tagsRef = ref(db, `users/${userId}/tags`);
+    const tagsSnapshot = await get(tagsRef);
+    
+    if (tagsSnapshot.exists()) {
+      const tagsData = tagsSnapshot.val();
+      
+      for (const tagId of tagIds) {
+        if (tagsData[tagId]) {
+          const tagData = tagsData[tagId];
+          
+          // 确保颜色值存在
+          let bgColor = tagData.bgColor;
+          let textColor = tagData.textColor;
+          
+          if (!bgColor && tagData.color && TAG_COLORS[tagData.color as keyof typeof TAG_COLORS]) {
+            bgColor = TAG_COLORS[tagData.color as keyof typeof TAG_COLORS].bg;
+            textColor = TAG_COLORS[tagData.color as keyof typeof TAG_COLORS].text;
+          } else if (!bgColor) {
+            // 默认颜色
+            bgColor = '#1E88E5';
+            textColor = '#ffffff';
+          }
+          
+          tags.push({
+            id: tagId,
+            ...tagData,
+            bgColor,
+            textColor
+          });
+        }
+      }
+    }
+    
+    // 按照使用数量排序
+    return tags.sort((a, b) => b.count - a.count);
   } catch (error) {
     console.error('Error fetching bookmark tags:', error);
     throw error;
   }
 }
 
-// 批量为书签添加标签
+// 批量为多个书签添加标签
 export async function addTagToBookmarks(userId: string, tagId: string, bookmarkIds: string[]): Promise<void> {
   try {
-    const promises = bookmarkIds.map(bookmarkId => 
-      addTagToBookmark(userId, tagId, bookmarkId)
+    // 首先检查标签是否存在
+    const tagRef = ref(db, `users/${userId}/tags/${tagId}`);
+    const tagSnapshot = await get(tagRef);
+    
+    if (!tagSnapshot.exists()) {
+      throw new Error('标签不存在');
+    }
+    
+    const now = Date.now();
+    const tagData = tagSnapshot.val();
+    const currentCount = tagData.count || 0;
+    
+    // 检查哪些书签尚未关联此标签
+    const bookmarkTagPromises = bookmarkIds.map(bookmarkId => 
+      get(ref(db, `users/${userId}/bookmarkTags/${bookmarkId}_${tagId}`))
     );
     
-    await Promise.all(promises);
+    const bookmarkTagSnapshots = await Promise.all(bookmarkTagPromises);
+    const newBookmarkIds = bookmarkIds.filter((_, index) => !bookmarkTagSnapshots[index].exists());
+    
+    // 如果没有新的书签需要添加标签，直接返回
+    if (newBookmarkIds.length === 0) {
+      return;
+    }
+    
+    // 创建批量更新对象
+    const updates: { [key: string]: any } = {};
+    
+    // 为每个新书签创建标签关联
+    newBookmarkIds.forEach(bookmarkId => {
+      updates[`users/${userId}/bookmarkTags/${bookmarkId}_${tagId}`] = {
+        bookmarkId,
+        tagId,
+        userId,
+        addedAt: now
+      };
+    });
+    
+    // 增加标签的使用计数 - 一次性加上所有新书签的数量
+    updates[`users/${userId}/tags/${tagId}/count`] = currentCount + newBookmarkIds.length;
+    updates[`users/${userId}/tags/${tagId}/updatedAt`] = now;
+    
+    // 批量更新数据库
+    await update(ref(db), updates);
   } catch (error) {
     console.error('Error adding tag to multiple bookmarks:', error);
     throw error;
@@ -411,11 +548,48 @@ export async function addTagToBookmarks(userId: string, tagId: string, bookmarkI
 // 批量从书签移除标签
 export async function removeTagFromBookmarks(userId: string, tagId: string, bookmarkIds: string[]): Promise<void> {
   try {
-    const promises = bookmarkIds.map(bookmarkId => 
-      removeTagFromBookmark(userId, tagId, bookmarkId)
+    // 检查标签是否存在
+    const tagRef = ref(db, `users/${userId}/tags/${tagId}`);
+    const tagSnapshot = await get(tagRef);
+    
+    if (!tagSnapshot.exists()) {
+      throw new Error('标签不存在');
+    }
+    
+    // 检查哪些书签已经关联了此标签
+    const bookmarkTagPromises = bookmarkIds.map(bookmarkId => 
+      get(ref(db, `users/${userId}/bookmarkTags/${bookmarkId}_${tagId}`))
     );
     
-    await Promise.all(promises);
+    const bookmarkTagSnapshots = await Promise.all(bookmarkTagPromises);
+    const existingBookmarkIds = bookmarkIds.filter((_, index) => bookmarkTagSnapshots[index].exists());
+    
+    // 如果没有书签和此标签关联，直接返回
+    if (existingBookmarkIds.length === 0) {
+      return;
+    }
+    
+    const now = Date.now();
+    
+    // 减少标签的使用计数
+    const tagData = tagSnapshot.val();
+    const currentCount = tagData.count || 0;
+    const newCount = Math.max(0, currentCount - existingBookmarkIds.length); // 确保count不会小于0
+    
+    // 创建批量更新对象
+    const updates: { [key: string]: any } = {};
+    
+    // 移除每个书签的标签关联
+    existingBookmarkIds.forEach(bookmarkId => {
+      updates[`users/${userId}/bookmarkTags/${bookmarkId}_${tagId}`] = null;
+    });
+    
+    // 更新标签的count
+    updates[`users/${userId}/tags/${tagId}/count`] = newCount;
+    updates[`users/${userId}/tags/${tagId}/updatedAt`] = now;
+    
+    // 批量更新数据库
+    await update(ref(db), updates);
   } catch (error) {
     console.error('Error removing tag from multiple bookmarks:', error);
     throw error;

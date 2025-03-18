@@ -12,10 +12,11 @@ import { Bookmark, getUserBookmarksByIds } from '@/lib/bookmarkService';
 import { BookmarkCard } from '@/components/bookmarks/BookmarkCard';
 import { Tag } from '@/lib/tagService';
 import { eventService, EVENTS } from '@/lib/eventService';
-import { Loader2, ArrowLeft, Tag as TagIcon, Bookmark as BookmarkIcon } from 'lucide-react';
+import { Loader2, ArrowLeft, Tag as TagIcon, Bookmark as BookmarkIcon, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { toast } from '@/components/ui/use-toast';
+import { AddTagBookmarkDialog } from '@/components/tags/AddTagBookmarkDialog';
 
 interface TagDetailsClientProps {
   tagId: string;
@@ -30,6 +31,7 @@ export function TagDetailsClient({ tagId }: TagDetailsClientProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isAddBookmarkDialogOpen, setIsAddBookmarkDialogOpen] = useState(false);
 
   // 获取标签信息和相关的书签
   const fetchTagDetails = async () => {
@@ -98,6 +100,17 @@ export function TagDetailsClient({ tagId }: TagDetailsClientProps) {
     setFilteredBookmarks(filtered);
   };
 
+  // 处理添加书签
+  const handleAddBookmark = () => {
+    setIsAddBookmarkDialogOpen(true);
+  };
+
+  // 处理书签添加成功
+  const handleBookmarkAdded = () => {
+    fetchTagDetails();
+    setIsAddBookmarkDialogOpen(false);
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex justify-center items-center">
@@ -160,6 +173,16 @@ export function TagDetailsClient({ tagId }: TagDetailsClientProps) {
                     </p>
                   </div>
                 </div>
+                
+                {/* 添加书签按钮 */}
+                <Button 
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  size="sm"
+                  onClick={handleAddBookmark}
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  添加书签
+                </Button>
               </div>
             ) : null}
           </div>
@@ -195,9 +218,13 @@ export function TagDetailsClient({ tagId }: TagDetailsClientProps) {
                   : '添加书签到这个标签以便在这里显示它们'
                 }
               </p>
-              <Link href="/bookmarks">
-                <Button className="bg-blue-600 hover:bg-blue-700 text-white">去添加书签</Button>
-              </Link>
+              <Button 
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={handleAddBookmark}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                添加书签
+              </Button>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -216,6 +243,17 @@ export function TagDetailsClient({ tagId }: TagDetailsClientProps) {
           )}
         </main>
       </div>
+      
+      {/* 添加书签对话框 */}
+      {tag && (
+        <AddTagBookmarkDialog
+          open={isAddBookmarkDialogOpen}
+          onOpenChange={setIsAddBookmarkDialogOpen}
+          tagId={tag.id}
+          tagName={tag.name}
+          onAdded={handleBookmarkAdded}
+        />
+      )}
     </div>
   );
 } 
