@@ -6,6 +6,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { SearchBar } from '@/components/dashboard/SearchBar';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import ImportButton from '@/components/dashboard/ImportButton';
 import { 
   Loader2, 
   FolderHeart, 
@@ -200,6 +201,7 @@ function CollectionContent() {
             </div>
             
             <div className="flex items-center gap-2">
+              <ImportButton />
               <ThemeToggle />
             </div>
           </div>

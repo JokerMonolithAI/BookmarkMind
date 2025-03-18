@@ -7,6 +7,7 @@ import { Suspense } from 'react';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { SearchBar } from '@/components/dashboard/SearchBar';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import ImportButton from '@/components/dashboard/ImportButton';
 import { Loader2, FolderHeart, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Collection, getUserCollections } from '@/lib/collectionService';
@@ -71,6 +72,7 @@ function CollectionsContent() {
             </div>
             
             <div className="flex items-center gap-2">
+              <ImportButton />
               <ThemeToggle />
             </div>
           </div>

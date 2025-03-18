@@ -33,4 +33,7 @@ export const EVENTS = {
   BOOKMARKS_IMPORTED: 'bookmarks_imported',
   BOOKMARK_DELETED: 'bookmark_deleted',
   COLLECTION_UPDATED: 'collection_updated',
+  TAG_CREATED: 'tag_created',
+  TAG_DELETED: 'tag_deleted',
+  TAG_UPDATED: 'tag_updated'
 }; 
