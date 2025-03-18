@@ -32,4 +32,5 @@ export const eventService = new EventService();
 export const EVENTS = {
   BOOKMARKS_IMPORTED: 'bookmarks_imported',
   BOOKMARK_DELETED: 'bookmark_deleted',
+  COLLECTION_UPDATED: 'collection_updated',
 }; 

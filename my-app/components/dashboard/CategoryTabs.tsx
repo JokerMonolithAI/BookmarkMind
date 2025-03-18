@@ -6,16 +6,20 @@ import { Brain, FolderHeart, Tag, Clock } from 'lucide-react'
 type CategoryType = 'smart' | 'collections' | 'tags' | 'timeline'
 
 interface CategoryTabsProps {
-  onCategoryChange: (category: CategoryType) => void
+  onCategoryChange: (category: CategoryType) => void;
+  activeCategory?: CategoryType;
 }
 
-export function CategoryTabs({ onCategoryChange }: CategoryTabsProps) {
-  const [activeCategory, setActiveCategory] = useState<CategoryType>('smart')
+export function CategoryTabs({ onCategoryChange, activeCategory: externalActiveCategory }: CategoryTabsProps) {
+  const [internalActiveCategory, setInternalActiveCategory] = useState<CategoryType>('smart');
+  
+  // 使用外部传入的activeCategory，如果没有则使用内部状态
+  const activeCategory = externalActiveCategory || internalActiveCategory;
 
   const handleCategoryChange = (category: CategoryType) => {
-    setActiveCategory(category)
-    onCategoryChange(category)
-  }
+    setInternalActiveCategory(category);
+    onCategoryChange(category);
+  };
 
   return (
     <div className="flex items-center border-b border-gray-200 mb-4">
@@ -67,5 +71,5 @@ export function CategoryTabs({ onCategoryChange }: CategoryTabsProps) {
         <span className="font-medium">时间线</span>
       </button>
     </div>
-  )
+  );
 } 

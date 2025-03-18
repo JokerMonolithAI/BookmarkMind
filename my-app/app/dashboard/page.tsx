@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Suspense } from 'react'
 import { BookmarkStats } from '@/components/dashboard/BookmarkStats'
 import BookmarkList from '@/components/dashboard/BookmarkList'
+import CollectionsList from '@/components/dashboard/CollectionsList'
 import ImportButton from '@/components/dashboard/ImportButton'
 import { ViewProvider, useView } from '@/components/dashboard/ViewToggle'
 import { SearchBar } from '@/components/dashboard/SearchBar'
@@ -22,7 +23,7 @@ type CategoryType = 'smart' | 'collections' | 'tags' | 'timeline';
 // 创建一个内容组件，使用视图上下文
 function DashboardContent() {
   const { activeView } = useView();
-  const [activeCategory, setActiveCategory] = useState<CategoryType>('smart');
+  const [activeCategory, setActiveCategory] = useState<CategoryType>('collections');
   
   const handleCategoryChange = (category: CategoryType) => {
     setActiveCategory(category);
@@ -69,7 +70,7 @@ function DashboardContent() {
 
           {/* 分类筛选标签栏 */}
           <div className="px-4 md:px-6 mt-4">
-            <CategoryTabs onCategoryChange={handleCategoryChange} />
+            <CategoryTabs onCategoryChange={handleCategoryChange} activeCategory={activeCategory} />
           </div>
 
           {/* Content View (List/Timeline) - 可滚动区域 */}
@@ -81,8 +82,11 @@ function DashboardContent() {
                 </div>
               }>
                 <div className="p-4 max-h-[calc(100vh-280px)] overflow-y-auto">
-                  {/* 显示书签列表 */}
-                  <BookmarkList />
+                  {activeCategory === 'collections' ? (
+                    <CollectionsList />
+                  ) : (
+                    <BookmarkList />
+                  )}
                 </div>
               </Suspense>
             </div>
