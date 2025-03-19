@@ -532,3 +532,47 @@ export async function getUserBookmarksByIds(userId: string, bookmarkIds: string[
     throw error;
   }
 }
+
+/**
+ * 更新书签分类名称
+ * @param userId 用户ID
+ * @param oldCategory 旧分类名称
+ * @param newCategory 新分类名称
+ */
+export async function updateBookmarkCategory(userId: string, oldCategory: string, newCategory: string): Promise<void> {
+  try {
+    // 获取用户所有书签
+    const bookmarks = await getUserBookmarks(userId);
+    
+    // 找出所有属于该分类的书签
+    const categoryBookmarks = bookmarks.filter(bookmark => 
+      bookmark.tags && bookmark.tags.includes(oldCategory)
+    );
+    
+    // 如果没有书签使用此分类，直接返回
+    if (categoryBookmarks.length === 0) {
+      return;
+    }
+    
+    // 批量更新每个书签的分类标签
+    const updates: Record<string, any> = {};
+    
+    for (const bookmark of categoryBookmarks) {
+      // 更新标签数组
+      const updatedTags = bookmark.tags?.map(tag => 
+        tag === oldCategory ? newCategory : tag
+      ) || [];
+      
+      // 更新书签的tags字段
+      updates[`users/${userId}/bookmarks/${bookmark.id}/tags`] = updatedTags;
+    }
+    
+    // 批量更新数据库
+    if (Object.keys(updates).length > 0) {
+      await update(ref(db), updates);
+    }
+  } catch (error) {
+    console.error('Error updating bookmark category:', error);
+    throw error;
+  }
+}
