@@ -183,7 +183,7 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
       setIsDeleting(true);
       
       // 获取书签数据，检查是否有PDF需要删除
-      const bookmarkRef = ref(db, `users/${user.uid}/bookmarks/bookmarks/${bookmarkId}`);
+      const bookmarkRef = ref(db, `users/${user.uid}/bookmarks/${bookmarkId}`);
       const snapshot = await get(bookmarkRef);
       
       if (snapshot.exists()) {
@@ -208,7 +208,7 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
       }
       
       // 删除书签数据
-      await remove(ref(db, `users/${user.uid}/bookmarks/bookmarks/${bookmarkId}`));
+      await remove(ref(db, `users/${user.uid}/bookmarks/${bookmarkId}`));
       
       // 更新本地状态
       setBookmarks(prev => prev.filter(bookmark => bookmark.id !== bookmarkId));
@@ -272,7 +272,7 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
           
           // 更新书签数据，添加PDF信息
-          const bookmarkRef = ref(db, `users/${user.uid}/bookmarks/bookmarks/${bookmarkId}`);
+          const bookmarkRef = ref(db, `users/${user.uid}/bookmarks/${bookmarkId}`);
           const snapshot = await get(bookmarkRef);
           
           if (snapshot.exists()) {
@@ -340,7 +340,7 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
       setIsDeleting(true);
       
       // 获取书签数据
-      const bookmarkRef = ref(db, `users/${user.uid}/bookmarks/bookmarks/${bookmarkId}`);
+      const bookmarkRef = ref(db, `users/${user.uid}/bookmarks/${bookmarkId}`);
       const snapshot = await get(bookmarkRef);
       
       if (snapshot.exists()) {
