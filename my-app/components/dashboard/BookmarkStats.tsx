@@ -21,7 +21,7 @@ export function BookmarkStats() {
 
     try {
       setLoading(true);
-      const bookmarksRef = ref(db, `users/${user.uid}/bookmarks/bookmarks`);
+      const bookmarksRef = ref(db, `users/${user.uid}/bookmarks`);
       const snapshot = await get(bookmarksRef);
 
       if (snapshot.exists()) {
