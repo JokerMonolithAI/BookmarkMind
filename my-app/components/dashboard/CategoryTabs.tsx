@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Brain, FolderHeart, Tag, Clock } from 'lucide-react'
+import { LayoutGrid, FolderHeart, Tag, Clock } from 'lucide-react'
 
 type CategoryType = 'smart' | 'collections' | 'tags' | 'timeline'
 
@@ -31,8 +31,8 @@ export function CategoryTabs({ onCategoryChange, activeCategory: externalActiveC
             : 'border-transparent text-gray-600 hover:text-gray-900'
         }`}
       >
-        <Brain className="h-5 w-5" />
-        <span className="font-medium">智能分类</span>
+        <LayoutGrid className="h-5 w-5" />
+        <span className="font-medium">书签墙</span>
       </button>
       
       <button
