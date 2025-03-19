@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { saveUserBookmarks } from '@/lib/bookmarkService';
+import { saveUserBookmarks, Bookmark as ServiceBookmark } from '@/lib/bookmarkService';
 import { apiService } from '@/lib/apiService';
 import { eventService, EVENTS } from '@/lib/eventService';
 import { Button } from '@/components/ui/button';
@@ -115,12 +115,20 @@ export default function BookmarkImport() {
       updateProgress(40);
       
       // 2. 将去重后的书签转换为对象
-      const bookmarksObject: Record<string, Bookmark> = {};
-      parsedBookmarks.forEach(bookmark => {
-        const id = bookmark.id || `bookmark_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const bookmarksObject: Record<string, ServiceBookmark> = {};
+      parsedBookmarks.forEach((bookmark, index) => {
+        // 使用更安全的ID生成方式，避免使用随机数或时间戳中的小数点
+        const id = bookmark.id || `bookmark_${Date.now()}_${index}`;
+        // 将Bookmark类型转换为ServiceBookmark类型
         bookmarksObject[id] = {
           ...bookmark,
-          id
+          id,
+          userId: user.uid,
+          updatedAt: new Date().toISOString(),
+          visitCount: 0,
+          isRead: false,
+          isFavorite: false,
+          type: 'article'  // 默认类型
         };
       });
       

@@ -1,3 +1,14 @@
+/**
+ * 书签服务 - 处理书签的存储、获取和管理
+ * 
+ * 修复说明：
+ * 1. 修复了Firebase写入时undefined值导致的错误
+ * 2. 添加了数据清理函数sanitizeObject，用于深度清理对象中的undefined值
+ * 3. 优化了书签属性的处理方式，确保可选属性正确设置
+ * 4. 增强了错误处理和日志记录，便于调试
+ * 5. 确保数据结构符合Firebase的要求
+ */
+
 import { db } from './firebase';
 import { ref, set, get, child, update, remove } from 'firebase/database';
 import { BookmarkFolder, UserBookmarkData, Bookmark as BookmarkType } from '../types/bookmark';
@@ -25,6 +36,19 @@ export async function saveUserBookmarks(
   existingBookmarkIds?: string[];
 }> {
   try {
+    // 添加一个辅助函数，用于清理对象中的undefined值
+    const sanitizeObject = <T extends Record<string, any>>(obj: T): T => {
+      const result = { ...obj };
+      for (const key in result) {
+        if (result[key] === undefined) {
+          delete result[key];
+        } else if (typeof result[key] === 'object' && result[key] !== null) {
+          result[key] = sanitizeObject(result[key]);
+        }
+      }
+      return result;
+    };
+    
     // 获取现有书签进行对比去重
     const dbRef = ref(db);
     const snapshot = await get(child(dbRef, `users/${userId}/bookmarks`));
@@ -51,17 +75,21 @@ export async function saveUserBookmarks(
     // 将现有书签转换为符合BookmarkType的格式
     for (const id in existingData.bookmarks) {
       const bookmark = existingData.bookmarks[id];
-      finalBookmarks[id] = {
+      const finalBookmark: BookmarkType = {
         id: bookmark.id,
         url: bookmark.url,
         title: bookmark.title,
-        description: bookmark.description,
-        favicon: bookmark.favicon,
         addedAt: bookmark.addedAt || Date.now(),
-        tags: bookmark.tags,
-        folderId: bookmark.folderId,
         createdAt: bookmark.createdAt || Date.now()
       };
+      
+      // 只添加存在的可选属性
+      if (bookmark.description) finalBookmark.description = bookmark.description;
+      if (bookmark.favicon) finalBookmark.favicon = bookmark.favicon;
+      if (bookmark.tags && Array.isArray(bookmark.tags)) finalBookmark.tags = bookmark.tags;
+      if (bookmark.folderId) finalBookmark.folderId = bookmark.folderId;
+      
+      finalBookmarks[id] = finalBookmark;
     }
     
     const finalFolders: Record<string, BookmarkFolder> = { ...existingData.folders, ...folders };
@@ -88,29 +116,26 @@ export async function saveUserBookmarks(
       
       // 如果不是重复书签，添加到最终书签列表
       if (!isDuplicate) {
-        finalBookmarks[bookmark.id] = {
+        const finalBookmark: BookmarkType = {
           id: bookmark.id,
           url: bookmark.url,
           title: bookmark.title,
-          description: bookmark.description,
-          favicon: bookmark.favicon,
           addedAt: bookmark.addedAt || Date.now(),
-          tags: bookmark.tags,
-          folderId: bookmark.folderId,
           createdAt: bookmark.createdAt || Date.now()
         };
+        
+        // 只添加存在的可选属性
+        if (bookmark.description) finalBookmark.description = bookmark.description;
+        if (bookmark.favicon) finalBookmark.favicon = bookmark.favicon;
+        if (bookmark.tags && Array.isArray(bookmark.tags)) finalBookmark.tags = bookmark.tags;
+        if (bookmark.folderId) finalBookmark.folderId = bookmark.folderId;
+        
+        finalBookmarks[bookmark.id] = finalBookmark;
         savedCount++;
       }
     });
     
-    // 保存最终的书签数据 - 使用 update 而不是 set
-    const userBookmarksRef = ref(db, `users/${userId}`);
-    const userData: UserBookmarkData = {
-      bookmarks: finalBookmarks,
-      folders: finalFolders,
-      lastUpdated: Date.now()
-    };
-    
+    // 在使用update之前，先清理数据
     // 验证数据不为空
     if (Object.keys(finalBookmarks).length === 0 && Object.keys(existingData.bookmarks).length > 0) {
       console.warn('No new bookmarks to save and would overwrite existing data - aborting');
@@ -121,8 +146,30 @@ export async function saveUserBookmarks(
       };
     }
     
-    // 使用 update 而不是 set
-    await update(userBookmarksRef, userData);
+    try {
+      // 使用辅助函数清理数据，而不是使用JSON转换的方式
+      const sanitizedData = {
+        bookmarks: sanitizeObject(finalBookmarks),
+        folders: sanitizeObject(finalFolders),
+        lastUpdated: Date.now()
+      };
+      
+      // 确保数据结构正确
+      console.log(`保存书签: ${Object.keys(sanitizedData.bookmarks).length}个，文件夹: ${Object.keys(sanitizedData.folders).length}个`);
+      
+      // 使用sanitized数据进行更新
+      const userBookmarksRef = ref(db, `users/${userId}`);
+      await update(userBookmarksRef, sanitizedData);
+    } catch (error) {
+      console.error('Error preparing data for Firebase:', error);
+      // 记录详细的数据结构信息，以便调试
+      console.error('Problem data structure:', {
+        bookmarksCount: Object.keys(finalBookmarks).length,
+        foldersCount: Object.keys(finalFolders).length,
+        sampleBookmarkKeys: Object.keys(finalBookmarks).slice(0, 3)
+      });
+      throw error;
+    }
     
     // 返回去重信息
     return {
@@ -132,6 +179,11 @@ export async function saveUserBookmarks(
     };
   } catch (error) {
     console.error('Error saving bookmarks:', error);
+    // 添加更详细的错误信息
+    if (error instanceof Error) {
+      console.error('Error details:', error.message);
+      console.error('Error stack:', error.stack);
+    }
     throw error;
   }
 }
@@ -454,7 +506,7 @@ export async function getUserBookmarksByIds(userId: string, bookmarkIds: string[
   try {
     if (!bookmarkIds.length) return [];
     
-    const userBookmarksRef = ref(db, `users/${userId}/bookmarks/bookmarks`);
+    const userBookmarksRef = ref(db, `users/${userId}/bookmarks`);
     const snapshot = await get(userBookmarksRef);
     
     if (!snapshot.exists()) {

@@ -153,7 +153,7 @@ const extractChromeBookmarks = (roots: any): Bookmark[] => {
   const bookmarks: Bookmark[] = [];
   
   // 递归函数提取书签
-  const extractBookmarksRecursive = (node: any) => {
+  const extractBookmarksRecursive = (node: any, index: number) => {
     if (node.type === 'url') {
       bookmarks.push({
         id: `bookmark_${Date.now()}_${bookmarks.length}`,
@@ -168,12 +168,12 @@ const extractChromeBookmarks = (roots: any): Bookmark[] => {
     }
     
     if (node.children) {
-      node.children.forEach(extractBookmarksRecursive);
+      node.children.forEach((child: any, idx: number) => extractBookmarksRecursive(child, idx));
     }
   };
   
   // 处理所有根节点
-  Object.values(roots).forEach(extractBookmarksRecursive);
+  Object.values(roots).forEach((root: any, index: number) => extractBookmarksRecursive(root, index));
   
   return bookmarks;
 };
@@ -185,7 +185,7 @@ const extractFirefoxBookmarks = (root: any): Bookmark[] => {
   const bookmarks: Bookmark[] = [];
   
   // 递归函数提取书签
-  const extractBookmarksRecursive = (node: any) => {
+  const extractBookmarksRecursive = (node: any, index: number) => {
     if (node.type === 'bookmark') {
       bookmarks.push({
         id: `bookmark_${Date.now()}_${bookmarks.length}`,
@@ -200,12 +200,12 @@ const extractFirefoxBookmarks = (root: any): Bookmark[] => {
     }
     
     if (node.children) {
-      node.children.forEach(extractBookmarksRecursive);
+      node.children.forEach((child: any, idx: number) => extractBookmarksRecursive(child, idx));
     }
   };
   
   // 处理根节点
-  extractBookmarksRecursive(root);
+  extractBookmarksRecursive(root, 0);
   
   return bookmarks;
 }; 

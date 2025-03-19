@@ -82,7 +82,7 @@ export default function BookmarkList({
     
     try {
       setLoading(true);
-      const bookmarksRef = ref(db, `users/${user.uid}/bookmarks/bookmarks`);
+      const bookmarksRef = ref(db, `users/${user.uid}/bookmarks`);
       const snapshot = await get(bookmarksRef);
       
       if (snapshot.exists()) {
@@ -225,7 +225,7 @@ export default function BookmarkList({
       setIsDeleting(true);
       
       // 删除书签数据
-      await remove(ref(db, `users/${user.uid}/bookmarks/bookmarks/${bookmarkId}`));
+      await remove(ref(db, `users/${user.uid}/bookmarks/${bookmarkId}`));
       
       // 更新本地状态
       setBookmarks(prev => prev.filter(bookmark => bookmark.id !== bookmarkId));
