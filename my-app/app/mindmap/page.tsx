@@ -17,6 +17,44 @@ import { TaskStatus } from '@/types/mindmap';
 import { getUserBookmarkCategories, updateBookmarkCategory } from '@/lib/bookmarkService';
 import { apiService } from '@/lib/apiService';
 
+// 删除旧的炫酷按钮样式
+const glowingButtonStyles = {
+  button: `
+    relative overflow-hidden 
+    bg-gradient-to-r from-blue-500 to-indigo-600
+    hover:from-blue-600 hover:to-indigo-700
+    text-white font-medium py-2 px-4 
+    rounded-lg shadow-lg
+    transform hover:scale-102 active:scale-98
+    transition-all duration-300 ease-out
+    border border-blue-400/30
+  `,
+  
+  glow: `
+    absolute inset-0
+    bg-gradient-to-r from-blue-400/20 to-indigo-400/20
+    opacity-70 
+  `,
+  
+  shine: `
+    absolute top-0 left-0 w-full h-full
+    bg-gradient-to-r from-transparent via-white/10 to-transparent
+    skew-x-[-20deg] translate-x-[-100%]
+    animate-shimmer
+  `,
+  
+  icon: `
+    mr-2 h-5 w-5 
+    text-white/90
+  `,
+  
+  text: `
+    relative z-10 
+    font-medium text-white
+    tracking-wide
+  `
+};
+
 // 脑图内容组件
 function MindMapContent() {
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -363,24 +401,32 @@ function MindMapContent() {
             
             <div className="flex items-center gap-2">
               <ImportButton />
-              <Button 
+              <style jsx>{`
+                @keyframes shimmer {
+                  0% { transform: translateX(-100%) skewX(-20deg); }
+                  100% { transform: translateX(200%) skewX(-20deg); }
+                }
+                .animate-shimmer { animation: shimmer 3s infinite ease-out; }
+              `}</style>
+              <button 
                 onClick={handleAnalyzeClick} 
                 disabled={isAnalyzing}
-                variant="default"
-                className="bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition-all duration-200 dark:bg-blue-700 dark:hover:bg-blue-800 hover:scale-105"
+                className={`${glowingButtonStyles.button} ${isAnalyzing ? 'opacity-80' : ''}`}
               >
+                <div className={glowingButtonStyles.glow}></div>
+                <div className={glowingButtonStyles.shine}></div>
                 {isAnalyzing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    分析中...
-                  </>
+                  <div className="flex items-center justify-center relative z-10">
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin text-white/90" />
+                    <span className={glowingButtonStyles.text}>分析中...</span>
+                  </div>
                 ) : (
-                  <>
-                    <Zap className="mr-2 h-4 w-4 animate-pulse" />
-                    AI智能分析
-                  </>
+                  <div className="flex items-center justify-center relative z-10">
+                    <Zap className={glowingButtonStyles.icon} />
+                    <span className={glowingButtonStyles.text}>AI智能分析</span>
+                  </div>
                 )}
-              </Button>
+              </button>
               <ThemeToggle />
             </div>
           </div>
@@ -405,45 +451,46 @@ function MindMapContent() {
                   {categories.map((category) => (
                     <div key={category.id} className="relative">
                       {editingCategory === category.id ? (
-                        <div className="flex items-center bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-700 rounded-md p-1 m-2">
+                        <div className="flex items-center bg-blue-50 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 rounded-md p-2 m-2 shadow-md">
                           <input
                             type="text"
                             value={categoryName}
                             onChange={(e) => setCategoryName(e.target.value)}
-                            className="w-full max-w-[120px] text-sm bg-transparent border-none outline-none focus:ring-0 text-gray-900 dark:text-gray-100"
+                            className="w-full max-w-[150px] text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded px-2 py-1 outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 text-gray-900 dark:text-gray-100"
                             autoFocus
+                            placeholder="输入分类名称"
                           />
-                          <div className="flex">
+                          <div className="flex ml-2">
                             <Button
                               size="sm"
-                              variant="ghost"
+                              variant="default"
                               onClick={handleSaveEdit}
                               disabled={isSavingCategory}
-                              className="h-5 w-5 p-0 ml-1"
-                              title="保存"
+                              className="h-7 w-7 p-0 bg-green-500 hover:bg-green-600 text-white ml-1"
+                              title="保存修改"
                             >
                               {isSavingCategory ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
+                                <Loader2 className="h-4 w-4 animate-spin" />
                               ) : (
-                                "✓"
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                               )}
                             </Button>
                             <Button
                               size="sm"
-                              variant="ghost"
+                              variant="outline"
                               onClick={handleCancelEdit}
                               disabled={isSavingCategory}
-                              className="h-5 w-5 p-0"
-                              title="取消"
+                              className="h-7 w-7 p-0 ml-1"
+                              title="取消编辑"
                             >
-                              ✕
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                             </Button>
                           </div>
                         </div>
                       ) : (
                         <button
                           onClick={() => handleCategoryClick(category.id)}
-                          className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
+                          className={`group relative flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
                             selectedCategory === category.id
                               ? 'border-blue-600 text-blue-600 dark:text-blue-400'
                               : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
@@ -458,10 +505,10 @@ function MindMapContent() {
                                 e.stopPropagation();
                                 handleEditClick(category);
                               }}
-                              className="h-5 w-5 p-0 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity ml-1"
+                              className="h-6 w-6 flex items-center justify-center cursor-pointer bg-gray-100 dark:bg-gray-700 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-full ml-1 transition-colors"
                               title="编辑分类名称"
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-pencil">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-pencil">
                                 <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
                                 <path d="m15 5 4 4"/>
                               </svg>

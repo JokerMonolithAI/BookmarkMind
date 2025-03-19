@@ -91,27 +91,39 @@ const MarkMap: React.FC<MarkMapProps> = ({
   const [isSvgReady, setIsSvgReady] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [layout, setLayout] = useState<'right' | 'left'>('right');
+  const cleanupRef = useRef<() => void>(() => {});
 
   // 创建并更新Markmap实例
   const createMarkmap = () => {
     if (!containerRef.current || !svgRef.current) return;
     
     try {
-      // 清除之前的SVG内容
-      if (svgRef.current) {
-        while (svgRef.current.firstChild) {
-          svgRef.current.removeChild(svgRef.current.firstChild);
+      // 先解除现有的脑图
+      if (markmapRef.current) {
+        try {
+          // @ts-ignore - 访问内部属性
+          if (markmapRef.current.svg && markmapRef.current.svg.node) {
+            // @ts-ignore - 清理事件监听器
+            markmapRef.current.svg.node().innerHTML = '';
+          }
+        } catch (e) {
+          console.warn('清理旧脑图出错，继续执行', e);
         }
-        
-        // 确保SVG元素有明确的固定像素值的宽度和高度，避免使用相对长度
-        const containerWidth = containerRef.current.clientWidth || 800;
-        const containerHeight = containerRef.current.clientHeight || 600;
-        
-        // 使用固定像素值，不使用相对单位
-        svgRef.current.setAttribute('width', String(containerWidth));
-        svgRef.current.setAttribute('height', String(containerHeight));
-        svgRef.current.setAttribute('viewBox', `0 0 ${containerWidth} ${containerHeight}`);
       }
+      
+      // 清除之前的SVG内容
+      while (svgRef.current.firstChild) {
+        svgRef.current.removeChild(svgRef.current.firstChild);
+      }
+      
+      // 确保SVG元素有明确的固定像素值的宽度和高度
+      const containerWidth = containerRef.current.clientWidth || 800;
+      const containerHeight = containerRef.current.clientHeight || 600;
+      
+      // 使用固定像素值进行初始化
+      svgRef.current.setAttribute('width', String(containerWidth));
+      svgRef.current.setAttribute('height', String(containerHeight));
+      svgRef.current.setAttribute('viewBox', `0 0 ${containerWidth} ${containerHeight}`);
       
       // 使用Transformer解析Markdown
       const transformer = new Transformer();
@@ -122,6 +134,9 @@ const MarkMap: React.FC<MarkMapProps> = ({
         autoFit: true,
         color: (node: any) => {
           // 根据节点深度生成颜色
+          const isDarkMode = document.documentElement.classList.contains('dark') || 
+            (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            
           const colors = [
             '#2563eb', // 蓝色 - 根节点
             '#8b5cf6', // 紫色 - 一级节点
@@ -130,6 +145,7 @@ const MarkMap: React.FC<MarkMapProps> = ({
             '#14b8a6', // 青色 - 四级节点
             '#84cc16', // 绿色 - 更深层节点
           ];
+          
           const depth = node.state?.depth || 0;
           return colors[Math.min(depth, colors.length - 1)];
         },
@@ -140,6 +156,46 @@ const MarkMap: React.FC<MarkMapProps> = ({
         paddingX: 10,
         initialExpandLevel: 3, // 初始展开到第3级
       }, root);
+      
+      // 简单添加深色模式样式 - 只修改文字颜色
+      const customStyle = document.createElement('style');
+      customStyle.textContent = `
+        .dark .markmap-node text {
+          fill: #ffffff;
+        }
+      `;
+      document.head.appendChild(customStyle);
+      
+      // 监听dark类的添加和移除 (针对Next.js theme切换)
+      const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          if (mutation.attributeName === 'class') {
+            const htmlElement = document.documentElement;
+            const isDark = htmlElement.classList.contains('dark');
+            if (isDark) {
+              document.querySelectorAll('.markmap-node text').forEach((el) => {
+                (el as SVGTextElement).style.fill = '#ffffff';
+              });
+            } else {
+              document.querySelectorAll('.markmap-node text').forEach((el) => {
+                (el as SVGTextElement).style.fill = '#333333';
+              });
+            }
+          }
+        });
+      });
+      observer.observe(document.documentElement, { attributes: true });
+      
+      // 销毁监听器的清理函数
+      const cleanup = () => {
+        observer.disconnect();
+        if (customStyle.parentNode) {
+          customStyle.parentNode.removeChild(customStyle);
+        }
+      };
+      
+      // 将清理函数保存到ref中，以便在组件卸载时调用
+      cleanupRef.current = cleanup;
       
       // 监听节点点击事件，处理URL跳转
       svgRef.current.addEventListener('click', (e) => {
@@ -172,7 +228,7 @@ const MarkMap: React.FC<MarkMapProps> = ({
       console.error('创建脑图失败：', error);
       toast({
         title: '创建脑图失败',
-        description: '渲染脑图时出现错误，请重试',
+        description: '渲染脑图时出现错误，请刷新页面重试',
         variant: 'destructive',
       });
     }
@@ -361,6 +417,12 @@ const MarkMap: React.FC<MarkMapProps> = ({
     boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)',
     zIndex: 100,
   } as React.CSSProperties;
+
+  useEffect(() => {
+    return () => {
+      cleanupRef.current();
+    };
+  }, []);
 
   return (
     <div
