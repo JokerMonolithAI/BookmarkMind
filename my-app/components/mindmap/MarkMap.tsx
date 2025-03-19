@@ -1,10 +1,24 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import { Transformer } from 'markmap-lib';
 import { Markmap } from 'markmap-view';
-import { transformer } from './transformer';
 import { Toolbar } from 'markmap-toolbar';
 import 'markmap-toolbar/dist/style.css';
+import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/use-toast';
+import { Minimize, Maximize, ZoomIn, ZoomOut, RefreshCw, ArrowLeft, ArrowRight } from 'lucide-react';
+
+// 默认Markdown内容结构
+const DEFAULT_MARKDOWN = `
+# 我的脑图
+## 知识分类 1
+### 子分类 1-1
+### 子分类 1-2
+## 知识分类 2
+### 子分类 2-1
+### 子分类 2-2
+`;
 
 // 定义MarkMap组件的属性类型
 interface MarkMapProps {
@@ -41,305 +55,403 @@ function renderToolbar(mm: Markmap, wrapper: HTMLElement) {
  * @param value 要检查的值
  * @returns 如果是有效数字则返回true，否则返回false
  */
-function isValidNumber(value: any): boolean {
+function isValidNumber(value: any): value is number {
   return typeof value === 'number' && !isNaN(value) && isFinite(value);
+}
+
+// 添加防抖函数
+function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): (...args: Parameters<T>) => void {
+  let timeout: NodeJS.Timeout;
+  return function executedFunction(...args: Parameters<T>) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
 }
 
 /**
  * MarkMap组件 - 使用markmap库将Markdown渲染为思维导图
  */
 const MarkMap: React.FC<MarkMapProps> = ({
-  markdown = '# 中心主题\n## 分支主题1\n### 子主题1\n### 子主题2\n## 分支主题2\n### 子主题3\n### 子主题4',
+  markdown = DEFAULT_MARKDOWN,
   className = 'w-full h-full min-h-[600px]',
 }) => {
-  // SVG元素的引用
-  const svgRef = useRef<SVGSVGElement>(null);
-  // 容器元素的引用
   const containerRef = useRef<HTMLDivElement>(null);
-  // Markmap实例的引用
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
   const markmapRef = useRef<Markmap | null>(null);
-  // 工具栏容器的引用
-  const toolbarRef = useRef<HTMLDivElement>(null);
-  // 添加状态跟踪组件是否已挂载
   const [isMounted, setIsMounted] = useState(false);
-  // 添加状态跟踪当前markdown
-  const [currentMarkdown, setCurrentMarkdown] = useState<string | null>(null);
-  // 添加状态跟踪SVG是否已准备好
+  const [currentMarkdown, setCurrentMarkdown] = useState(markdown);
   const [isSvgReady, setIsSvgReady] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [layout, setLayout] = useState<'right' | 'left'>('right');
 
-  // 组件挂载状态
-  useEffect(() => {
-    setIsMounted(true);
-    return () => {
-      // 组件卸载时清理
-      setIsMounted(false);
-      if (markmapRef.current) {
-        try {
-          // 尝试清理旧实例
-          markmapRef.current = null;
-        } catch (e) {
-          console.error('清理Markmap实例失败:', e);
-        }
-      }
-    };
-  }, []);
-
-  // 监听markdown变化
-  useEffect(() => {
-    if (markdown) {
-      // 重置SVG准备状态
-      setIsSvgReady(false);
-      // 更新当前markdown
-      setCurrentMarkdown(markdown);
-    }
-  }, [markdown]);
-
-  // 添加自定义样式
-  useEffect(() => {
-    if (!isMounted) return;
-    
-    const styleId = 'markmap-custom-style';
-    if (!document.getElementById(styleId)) {
-      const style = document.createElement('style');
-      style.id = styleId;
-      style.textContent = `
-        .markmap-node {
-          cursor: pointer;
-        }
-        .markmap-node-circle {
-          fill: #fff;
-          stroke-width: 2.5;
-        }
-        .markmap-node-text {
-          fill: #000;
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-          font-size: 1.15em;
-          font-weight: 500;
-        }
-        .markmap-link {
-          fill: none;
-          stroke-width: 2.5;
-        }
-        /* 确保链接有明显的样式 */
-        .markmap-node-text a {
-          fill: #0066cc;
-          text-decoration: underline;
-          cursor: pointer;
-        }
-        .markmap-node-text a:hover {
-          fill: #0044aa;
-        }
-      `;
-      document.head.appendChild(style);
-    }
-  }, [isMounted]);
-
-  // 初始化SVG元素
-  useEffect(() => {
-    if (!svgRef.current || !containerRef.current || !isMounted) return;
-    
-    const svg = svgRef.current;
-    const container = containerRef.current;
-    
-    // 确保SVG元素有明确的尺寸
-    const updateSvgSize = () => {
-      const containerRect = container.getBoundingClientRect();
-      
-      // 确保尺寸是有效的正数
-      const width = Math.max(containerRect.width, 100);
-      const height = Math.max(containerRect.height, 100);
-      
-      // 设置SVG的viewBox和尺寸
-      svg.setAttribute('width', `${width}px`);
-      svg.setAttribute('height', `${height}px`);
-      svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-    };
-    
-    // 初始更新尺寸
-    updateSvgSize();
-    
-    // 使用ResizeObserver监听容器尺寸变化
-    const resizeObserver = new ResizeObserver(() => {
-      updateSvgSize();
-      // 标记SVG已准备好
-      setIsSvgReady(true);
-    });
-    
-    resizeObserver.observe(container);
-    
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [svgRef.current, containerRef.current, isMounted]);
-
-  // 创建和更新Markmap实例
-  useEffect(() => {
-    if (!svgRef.current || !isMounted || !currentMarkdown || !containerRef.current || !isSvgReady) return;
-    
-    // 清理之前的实例
-    if (markmapRef.current) {
-      try {
-        // 尝试清理旧实例
-        const svg = svgRef.current;
-        while (svg.firstChild) {
-          svg.removeChild(svg.firstChild);
-        }
-      } catch (e) {
-        console.error('清理SVG元素失败:', e);
-      }
-      markmapRef.current = null;
-    }
+  // 创建并更新Markmap实例
+  const createMarkmap = () => {
+    if (!containerRef.current || !svgRef.current) return;
     
     try {
-      const svg = svgRef.current;
-      const container = containerRef.current;
-      const containerRect = container.getBoundingClientRect();
-      
-      // 确保尺寸是有效的正数
-      const width = Math.max(containerRect.width, 100);
-      const height = Math.max(containerRect.height, 100);
-      
-      // 创建Markmap实例
-      const mm = Markmap.create(svg, {
-        // 自定义配置
-        nodeMinHeight: 20,
-        spacingHorizontal: 120,
-        spacingVertical: 40,
-        autoFit: true,
-        duration: 500,
-        maxWidth: 500, // 限制节点最大宽度
-        initialExpandLevel: -1, // 展开所有节点
-        zoom: true,
-        pan: true,
-      });
-      
-      // 手动设置d3-zoom的extent，解决SVGLength错误
-      if (mm.zoom && typeof mm.zoom.extent === 'function') {
-        mm.zoom.extent([[0, 0], [width, height]]);
-      }
-      
-      // 修补d3-zoom的transform函数，防止NaN值
-      if (mm.zoom && mm.zoom.transform) {
-        const originalTransform = mm.zoom.transform;
-        mm.zoom.transform = function(selection, transform) {
-          // 检查transform对象的x、y和k值是否有效
-          if (transform && 
-              // 使用类型守卫检查transform是否为对象且具有x、y、k属性
-              typeof transform === 'object' && 
-              'x' in transform && isValidNumber(transform.x) && 
-              'y' in transform && isValidNumber(transform.y) && 
-              'k' in transform && isValidNumber(transform.k)) {
-            return originalTransform.call(this, selection, transform);
-          } else {
-            console.warn('跳过无效的transform:', transform);
-            return selection;
-          }
-        };
-      }
-      
-      markmapRef.current = mm;
-      
-      // 如果工具栏容器存在，则渲染工具栏
-      if (toolbarRef.current) {
-        renderToolbar(mm, toolbarRef.current);
-      }
-      
-      // 添加事件监听器，确保所有链接在新标签页打开
-      svg.addEventListener('click', (e) => {
-        const target = e.target as Element;
-        if (target.tagName === 'A' || target.closest('a')) {
-          const link = target.tagName === 'A' ? target : target.closest('a');
-          const href = link?.getAttribute('href');
-          if (href) {
-            e.preventDefault();
-            window.open(href, '_blank', 'noopener,noreferrer');
-          }
+      // 清除之前的SVG内容
+      if (svgRef.current) {
+        while (svgRef.current.firstChild) {
+          svgRef.current.removeChild(svgRef.current.firstChild);
         }
-      });
+        
+        // 确保SVG元素有明确的固定像素值的宽度和高度，避免使用相对长度
+        const containerWidth = containerRef.current.clientWidth || 800;
+        const containerHeight = containerRef.current.clientHeight || 600;
+        
+        // 使用固定像素值，不使用相对单位
+        svgRef.current.setAttribute('width', String(containerWidth));
+        svgRef.current.setAttribute('height', String(containerHeight));
+        svgRef.current.setAttribute('viewBox', `0 0 ${containerWidth} ${containerHeight}`);
+      }
       
-      // 转换Markdown为思维导图数据
+      // 使用Transformer解析Markdown
+      const transformer = new Transformer();
       const { root } = transformer.transform(currentMarkdown);
       
-      // 更新数据
-      mm.setData(root);
+      // 创建Markmap实例
+      markmapRef.current = Markmap.create(svgRef.current, {
+        autoFit: true,
+        color: (node: any) => {
+          // 根据节点深度生成颜色
+          const colors = [
+            '#2563eb', // 蓝色 - 根节点
+            '#8b5cf6', // 紫色 - 一级节点
+            '#ec4899', // 粉色 - 二级节点
+            '#f97316', // 橙色 - 三级节点
+            '#14b8a6', // 青色 - 四级节点
+            '#84cc16', // 绿色 - 更深层节点
+          ];
+          const depth = node.state?.depth || 0;
+          return colors[Math.min(depth, colors.length - 1)];
+        },
+        duration: 500, // 动画持续时间
+        nodeMinHeight: 16,
+        spacingHorizontal: 80,
+        spacingVertical: 15,
+        paddingX: 10,
+        initialExpandLevel: 3, // 初始展开到第3级
+      }, root);
       
-      // 使用requestAnimationFrame确保DOM已更新
-      requestAnimationFrame(() => {
-        if (mm && isMounted) {
-          try {
-            mm.fit();
-          } catch (e) {
-            console.error('适应视图失败:', e);
+      // 监听节点点击事件，处理URL跳转
+      svgRef.current.addEventListener('click', (e) => {
+        const target = e.target as SVGElement;
+        const textElement = target.closest('text');
+        if (textElement) {
+          const content = textElement.textContent || '';
+          const urlMatch = content.match(/URL: (https?:\/\/[^\s]+)/);
+          if (urlMatch && urlMatch[1]) {
+            window.open(urlMatch[1], '_blank');
           }
         }
       });
+      
+      // 更新工具栏
+      if (markmapRef.current && toolbarRef.current) {
+        if (toolbarRef.current.firstChild) {
+          toolbarRef.current.removeChild(toolbarRef.current.firstChild);
+        }
+        
+        const toolbar = new Toolbar();
+        toolbar.attach(markmapRef.current);
+        const toolbarElement = toolbar.render();
+        toolbarElement.style.display = 'none'; // 隐藏原始工具栏，使用自定义控件
+        toolbarRef.current.appendChild(toolbarElement);
+      }
+      
+      setIsSvgReady(true);
     } catch (error) {
-      console.error('初始化Markmap失败:', error);
+      console.error('创建脑图失败：', error);
+      toast({
+        title: '创建脑图失败',
+        description: '渲染脑图时出现错误，请重试',
+        variant: 'destructive',
+      });
     }
-  }, [currentMarkdown, isMounted, isSvgReady]);
+  };
 
-  // 监听窗口大小变化
+  // 初始化Markmap
   useEffect(() => {
-    if (!isMounted || !containerRef.current) return;
-    
+    setIsMounted(true);
+    setCurrentMarkdown(markdown);
+  }, [markdown]);
+  
+  // 在组件挂载和markdown更新时创建Markmap
+  useEffect(() => {
+    if (isMounted) {
+      createMarkmap();
+    }
+  }, [isMounted, currentMarkdown]);
+  
+  // 监听窗口大小变化，调整SVG大小
+  useEffect(() => {
     const handleResize = () => {
       if (markmapRef.current && containerRef.current && svgRef.current) {
-        const container = containerRef.current;
-        const containerRect = container.getBoundingClientRect();
+        // 重新设置 SVG 尺寸
+        const containerWidth = containerRef.current.clientWidth || 800;
+        const containerHeight = containerRef.current.clientHeight || 600;
         
-        // 确保尺寸是有效的正数
-        const width = Math.max(containerRect.width, 100);
-        const height = Math.max(containerRect.height, 100);
+        // 明确设置为数值，不带单位
+        svgRef.current.setAttribute('width', String(containerWidth));
+        svgRef.current.setAttribute('height', String(containerHeight));
+        svgRef.current.setAttribute('viewBox', `0 0 ${containerWidth} ${containerHeight}`);
         
-        // 更新SVG尺寸
-        const svg = svgRef.current;
-        svg.setAttribute('width', `${width}px`);
-        svg.setAttribute('height', `${height}px`);
-        svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-        
-        // 更新extent
-        try {
-          // 访问内部zoom属性并设置extent
-          const mm = markmapRef.current;
-          if (mm.zoom && typeof mm.zoom.extent === 'function') {
-            mm.zoom.extent([[0, 0], [width, height]]);
+        // 使用 setTimeout 确保 DOM 更新后再执行 fit
+        setTimeout(() => {
+          markmapRef.current?.fit();
+        }, 100);
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+  
+  // 处理全屏切换
+  const toggleFullscreen = async () => {
+    if (!containerRef.current) return;
+    
+    try {
+      if (!isFullscreen) {
+        // 进入全屏
+        if (containerRef.current.requestFullscreen) {
+          await containerRef.current.requestFullscreen();
+        } else if ((containerRef.current as any).webkitRequestFullscreen) {
+          await (containerRef.current as any).webkitRequestFullscreen();
+        } else if ((containerRef.current as any).msRequestFullscreen) {
+          await (containerRef.current as any).msRequestFullscreen();
+        }
+        setIsFullscreen(true);
+      } else {
+        // 退出全屏
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if ((document as any).webkitExitFullscreen) {
+          await (document as any).webkitExitFullscreen();
+        } else if ((document as any).msExitFullscreen) {
+          await (document as any).msExitFullscreen();
+        }
+        setIsFullscreen(false);
+      }
+      
+      // 调整SVG大小
+      setTimeout(() => {
+        if (markmapRef.current) {
+          markmapRef.current.fit();
+        }
+      }, 100);
+    } catch (error) {
+      console.error('全屏切换失败:', error);
+    }
+  };
+  
+  // 处理缩放
+  const handleZoom = debounce((scale: number) => {
+    if (!markmapRef.current || !svgRef.current) return;
+    
+    try {
+      // 获取当前变换状态
+      const gElement = svgRef.current.querySelector('g');
+      if (!gElement) return;
+
+      const transform = gElement.getAttribute('transform');
+      if (!transform) return;
+
+      // 解析当前的缩放值
+      const scaleMatch = transform.match(/scale\(([\d.]+)\)/);
+      const currentScale = scaleMatch ? parseFloat(scaleMatch[1]) : 1;
+      
+      // 计算新的缩放值
+      const newScale = scale > 1 ? currentScale * 1.2 : currentScale * 0.8;
+      
+      // 确保缩放值在合理范围内
+      if (isNaN(newScale) || newScale < 0.1 || newScale > 10) {
+        console.warn('缩放值超出范围，重置为默认值');
+        markmapRef.current.fit();
+        return;
+      }
+
+      // 使用安全的缩放方法
+      markmapRef.current.rescale(newScale);
+      
+      // 添加防错处理
+      setTimeout(() => {
+        if (markmapRef.current && containerRef.current && svgRef.current) {
+          // 检查 SVG 元素是否有效
+          const gElement = svgRef.current.querySelector('g');
+          if (gElement) {
+            const transform = gElement.getAttribute('transform');
+            if (transform && transform.includes('NaN')) {
+              // 如果发现无效的变换，重置视图
+              markmapRef.current.fit();
+            }
           }
           
-          // 适应视图
-          mm.fit();
-        } catch (e) {
-          console.error('更新Markmap尺寸失败:', e);
+          // 检查并修复 SVG 属性
+          if (!svgRef.current.getAttribute('width') || 
+              !svgRef.current.getAttribute('height') || 
+              !svgRef.current.getAttribute('viewBox')) {
+            const containerWidth = containerRef.current.clientWidth || 800;
+            const containerHeight = containerRef.current.clientHeight || 600;
+            svgRef.current.setAttribute('width', String(containerWidth));
+            svgRef.current.setAttribute('height', String(containerHeight));
+            svgRef.current.setAttribute('viewBox', `0 0 ${containerWidth} ${containerHeight}`);
+          }
         }
+      }, 200);
+    } catch (error) {
+      console.error('缩放失败:', error);
+      // 如果缩放失败，尝试重置视图
+      try {
+        markmapRef.current?.fit();
+      } catch (e) {
+        console.error('重置视图也失败:', e);
       }
-    };
+    }
+  }, 100); // 100ms 的防抖延迟
+  
+  // 重置视图
+  const handleReset = () => {
+    if (!markmapRef.current) return;
+    markmapRef.current.fit();
+  };
+  
+  // 切换布局方向
+  const toggleLayout = () => {
+    if (!markmapRef.current) return;
     
-    // 使用防抖函数包装handleResize
-    let resizeTimeout: NodeJS.Timeout | null = null;
-    const debouncedResize = () => {
-      if (resizeTimeout) {
-        clearTimeout(resizeTimeout);
-      }
-      resizeTimeout = setTimeout(handleResize, 100);
-    };
+    const newLayout = layout === 'right' ? 'left' : 'right';
+    setLayout(newLayout);
     
-    window.addEventListener('resize', debouncedResize);
-    
-    return () => {
-      window.removeEventListener('resize', debouncedResize);
-      if (resizeTimeout) {
-        clearTimeout(resizeTimeout);
-      }
-    };
-  }, [isMounted]);
+    try {
+      // 重新渲染脑图
+      setCurrentMarkdown(prev => prev + ' '); // 通过轻微修改Markdown触发重新渲染
+      
+      // 通知用户
+      toast({
+        title: `布局已更改`,
+        description: `脑图现在从中心向${newLayout === 'right' ? '右侧' : '左侧'}展开`,
+      });
+    } catch (error) {
+      console.error('切换布局失败:', error);
+    }
+  };
+  
+  // 计算控制栏样式，根据全屏状态调整
+  const controlsStyle = {
+    position: 'absolute',
+    bottom: '20px',
+    right: '20px',
+    display: 'flex',
+    gap: '8px',
+    background: 'rgba(255, 255, 255, 0.8)',
+    backdropFilter: 'blur(4px)',
+    padding: '8px',
+    borderRadius: '8px',
+    boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)',
+    zIndex: 100,
+  } as React.CSSProperties;
 
   return (
-    <div ref={containerRef} className={`relative ${className}`}>
+    <div
+      ref={containerRef}
+      className={`relative w-full h-full overflow-hidden ${className}`}
+      style={{ minHeight: '300px' }}
+    >
+      {/* 控制栏 */}
+      <div style={controlsStyle} className="dark:bg-gray-800/80 dark:text-gray-200">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => handleZoom(1.2)}
+          title="放大"
+          className="h-8 w-8"
+        >
+          <ZoomIn className="h-4 w-4" />
+        </Button>
+        
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => handleZoom(0.8)}
+          title="缩小"
+          className="h-8 w-8"
+        >
+          <ZoomOut className="h-4 w-4" />
+        </Button>
+        
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleReset}
+          title="重置视图"
+          className="h-8 w-8"
+        >
+          <RefreshCw className="h-4 w-4" />
+        </Button>
+        
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleLayout}
+          title={`切换为${layout === 'right' ? '左侧' : '右侧'}展开`}
+          className="h-8 w-8"
+        >
+          {layout === 'right' ? (
+            <ArrowRight className="h-4 w-4" />
+          ) : (
+            <ArrowLeft className="h-4 w-4" />
+          )}
+        </Button>
+        
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleFullscreen}
+          title={isFullscreen ? '退出全屏' : '全屏模式'}
+          className="h-8 w-8"
+        >
+          {isFullscreen ? (
+            <Minimize className="h-4 w-4" />
+          ) : (
+            <Maximize className="h-4 w-4" />
+          )}
+        </Button>
+      </div>
+      
+      {/* SVG容器 - 修复width和height设置 */}
       <svg 
         ref={svgRef} 
-        className="w-full h-full" 
-        style={{ minHeight: '600px' }}
+        className="w-full h-full"
+        width="800"
+        height="600"
+        viewBox="0 0 800 600"
+        preserveAspectRatio="xMidYMid meet"
+        style={{
+          cursor: 'grab',
+          background: 'transparent',
+        }}
       />
-      <div className="absolute bottom-4 right-4" ref={toolbarRef}></div>
+      
+      {/* 隐藏的工具栏容器 - 用于保存Toolbar实例 */}
+      <div className="hidden" ref={toolbarRef}></div>
+      
+      {/* 加载状态 */}
+      {!isSvgReady && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-gray-900/50">
+          <span className="text-gray-500 dark:text-gray-400">加载脑图中...</span>
+        </div>
+      )}
     </div>
   );
 };

@@ -23,6 +23,13 @@ export interface Bookmark extends BookmarkType {
   isRead: boolean;
   isFavorite: boolean;
   type?: 'article' | 'video' | 'image' | 'document' | 'other';
+  analysis?: {
+    category?: string;
+    tags?: string[];
+    summary?: string;
+    sentiment?: string;
+    keywords?: string[];
+  };
 }
 
 // 保存用户的书签数据
@@ -304,7 +311,8 @@ function convertToBookmark(id: string, data: any, userId: string): Bookmark {
     visitCount: data.visitCount || 0,
     isRead: data.isRead || false,
     isFavorite: data.isFavorite || false,
-    type: data.type || 'article'
+    type: data.type || 'article',
+    analysis: data.analysis || {}
   };
 }
 
@@ -464,8 +472,8 @@ export async function getUserBookmarkCategories(userId: string): Promise<string[
     
     // 遍历所有书签，提取分类信息
     bookmarks.forEach(bookmark => {
-      if (bookmark.type) {
-        categories.add(bookmark.type);
+      if (bookmark.analysis && bookmark.analysis.category) {
+        categories.add(bookmark.analysis.category);
       }
     });
     
@@ -546,7 +554,7 @@ export async function updateBookmarkCategory(userId: string, oldCategory: string
     
     // 找出所有属于该分类的书签
     const categoryBookmarks = bookmarks.filter(bookmark => 
-      bookmark.tags && bookmark.tags.includes(oldCategory)
+      bookmark.analysis && bookmark.analysis.category === oldCategory
     );
     
     // 如果没有书签使用此分类，直接返回
@@ -554,17 +562,12 @@ export async function updateBookmarkCategory(userId: string, oldCategory: string
       return;
     }
     
-    // 批量更新每个书签的分类标签
+    // 批量更新每个书签的分类
     const updates: Record<string, any> = {};
     
     for (const bookmark of categoryBookmarks) {
-      // 更新标签数组
-      const updatedTags = bookmark.tags?.map(tag => 
-        tag === oldCategory ? newCategory : tag
-      ) || [];
-      
-      // 更新书签的tags字段
-      updates[`users/${userId}/bookmarks/${bookmark.id}/tags`] = updatedTags;
+      // 更新分类字段
+      updates[`users/${userId}/bookmarks/${bookmark.id}/analysis/category`] = newCategory;
     }
     
     // 批量更新数据库
