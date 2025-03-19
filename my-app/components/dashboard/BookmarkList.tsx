@@ -5,7 +5,13 @@ import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
 import { ref, get, remove, update } from 'firebase/database';
 import { Button } from '@/components/ui/button';
-import { ExternalLink, Trash, FileUp, FileText } from 'lucide-react';
+import { 
+  Trash, 
+  FileUp, 
+  ExternalLink, 
+  FileText,
+  File,
+} from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { useView } from './ViewToggle';
 import ImportButton from './ImportButton';
@@ -27,6 +33,13 @@ import { Progress } from "@/components/ui/progress";
 import { Tag, getBookmarkTags } from '@/lib/tagService';
 import { getBookmarkCollections } from '@/lib/collectionService';
 import { Badge } from '@/components/ui/badge';
+// 导入Tooltip组件
+import { 
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // 在本地定义 Bookmark 接口，添加PDF相关字段
 interface Bookmark {
@@ -77,6 +90,7 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
   // 添加标签和收藏集的状态
   const [bookmarkMetadata, setBookmarkMetadata] = useState<{[key: string]: BookmarkMetadata}>({});
   const [loadingMetadata, setLoadingMetadata] = useState<{[key: string]: boolean}>({});
+  const [pdfToDelete, setPdfToDelete] = useState<{bookmarkId: string, fileId: string, fileName: string} | null>(null);
 
   // 获取书签数据
   const fetchBookmarks = useCallback(async () => {
@@ -238,6 +252,29 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
   const handlePdfUpload = async (bookmarkId: string, file: File) => {
     if (!user || isUploading) return;
     
+    // 验证文件类型
+    if (file.type !== 'application/pdf') {
+      toast({
+        title: "文件类型错误",
+        description: "只能上传PDF文件",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // 找到书签对象
+    const bookmark = bookmarks.find(b => b.id === bookmarkId);
+    
+    // 检查是否已有PDF文件
+    if (bookmark?.pdfFiles && Object.keys(bookmark.pdfFiles).length > 0) {
+      toast({
+        title: "已存在PDF文件",
+        description: "每个书签只能上传一个PDF文件，请先删除现有文件",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     try {
       setIsUploading(true);
       setUploadingBookmarkId(bookmarkId);
@@ -273,47 +310,35 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
           
           // 更新书签数据，添加PDF信息
           const bookmarkRef = ref(db, `users/${user.uid}/bookmarks/${bookmarkId}`);
-          const snapshot = await get(bookmarkRef);
           
-          if (snapshot.exists()) {
-            const bookmarkData = snapshot.val();
-            const pdfFiles = bookmarkData.pdfFiles || {};
-            const newFileId = `pdf_${timestamp}`;
-            
-            pdfFiles[newFileId] = {
+          const fileId = `pdf_${timestamp}`;
+          const pdfFiles = {
+            [fileId]: {
               url: downloadURL,
               name: file.name,
               addedAt: timestamp,
               storagePath: filePath
-            };
-            
-            // 更新数据库
-            await update(bookmarkRef, { pdfFiles });
-            
-            // 更新本地状态
-            setBookmarks(prev => prev.map(bookmark => {
-              if (bookmark.id === bookmarkId) {
-                return {
-                  ...bookmark,
-                  pdfFiles: {
-                    ...bookmark.pdfFiles,
-                    [newFileId]: {
-                      url: downloadURL,
-                      name: file.name,
-                      addedAt: timestamp,
-                      storagePath: filePath
-                    }
-                  }
-                };
-              }
-              return bookmark;
-            }));
-            
-            toast({
-              title: "PDF上传成功",
-              description: `${file.name} 已成功上传`,
-            });
-          }
+            }
+          };
+          
+          // 更新数据库
+          await update(bookmarkRef, { pdfFiles });
+          
+          // 更新本地状态
+          setBookmarks(prev => prev.map(bookmark => {
+            if (bookmark.id === bookmarkId) {
+              return {
+                ...bookmark,
+                pdfFiles
+              };
+            }
+            return bookmark;
+          }));
+          
+          toast({
+            title: "PDF上传成功",
+            description: `${file.name} 已成功上传`,
+          });
           
           setIsUploading(false);
           setUploadingBookmarkId(null);
@@ -332,7 +357,17 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
     }
   };
 
-  // 删除PDF文件
+  // 添加文件上传处理器
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>, bookmarkId: string) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handlePdfUpload(bookmarkId, file);
+    }
+    // 清空文件输入，以便可以再次选择同一文件
+    e.target.value = '';
+  };
+
+  // 更新deletePdf函数，确保完全删除文件
   const deletePdf = async (bookmarkId: string, fileId: string, fileName: string) => {
     if (!user || isDeleting) return;
     
@@ -341,46 +376,35 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
       
       // 获取书签数据
       const bookmarkRef = ref(db, `users/${user.uid}/bookmarks/${bookmarkId}`);
-      const snapshot = await get(bookmarkRef);
+      const bookmark = bookmarks.find(b => b.id === bookmarkId);
       
-      if (snapshot.exists()) {
-        const bookmarkData = snapshot.val();
+      if (bookmark?.pdfFiles && bookmark.pdfFiles[fileId]) {
+        const fileData = bookmark.pdfFiles[fileId];
         
-        if (bookmarkData.pdfFiles && bookmarkData.pdfFiles[fileId]) {
-          const fileData = bookmarkData.pdfFiles[fileId];
-          
-          // 如果有存储路径，删除Storage中的文件
-          if (fileData.storagePath) {
-            const storage = getStorage();
-            const fileRef = storageRef(storage, fileData.storagePath);
-            await deleteObject(fileRef);
-          }
-          
-          // 从书签数据中删除PDF信息
-          const updatedPdfFiles = { ...bookmarkData.pdfFiles };
-          delete updatedPdfFiles[fileId];
-          
-          // 更新数据库
-          await update(bookmarkRef, { pdfFiles: updatedPdfFiles });
-          
-          // 更新本地状态
-          setBookmarks(prev => prev.map(bookmark => {
-            if (bookmark.id === bookmarkId && bookmark.pdfFiles) {
-              const newPdfFiles = { ...bookmark.pdfFiles };
-              delete newPdfFiles[fileId];
-              return {
-                ...bookmark,
-                pdfFiles: newPdfFiles
-              };
-            }
-            return bookmark;
-          }));
-          
-          toast({
-            title: "PDF已删除",
-            description: `${fileName} 已成功删除`,
-          });
+        // 如果有存储路径，删除Storage中的文件
+        if (fileData.storagePath) {
+          const storage = getStorage();
+          const fileRef = storageRef(storage, fileData.storagePath);
+          await deleteObject(fileRef);
         }
+        
+        // 更新数据库，清空pdfFiles字段
+        await update(bookmarkRef, { pdfFiles: null });
+        
+        // 更新本地状态
+        setBookmarks(prev => prev.map(b => {
+          if (b.id === bookmarkId) {
+            // 创建一个新对象，但不包含pdfFiles属性
+            const { pdfFiles, ...rest } = b;
+            return rest;
+          }
+          return b;
+        }));
+        
+        toast({
+          title: "PDF已删除",
+          description: `${fileName} 已成功删除`,
+        });
       }
       
     } catch (error) {
@@ -392,6 +416,7 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
       });
     } finally {
       setIsDeleting(false);
+      setPdfToDelete(null);
     }
   };
 
@@ -498,7 +523,8 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
       url.includes('dev.') ||
       url.includes('translate.google') ||
       title.includes('工具') ||
-      title.includes('翻译')
+      title.includes('翻译') ||
+      title.includes('google')
     ) {
       return 'card-gradient-purple';
     }
@@ -513,7 +539,9 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
       url.includes('feishu') ||
       title.includes('ai') ||
       title.includes('人工智能') ||
-      title.includes('机器学习')
+      title.includes('机器学习') ||
+      title.includes('agi') ||
+      title.includes('飞书')
     ) {
       return 'card-gradient-orange';
     }
@@ -528,13 +556,18 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
       url.includes('platform') ||
       url.includes('kancloud') ||
       title.includes('框架') ||
-      title.includes('platform')
+      title.includes('platform') ||
+      title.includes('前言') ||
+      title.includes('capacity') ||
+      title.includes('cloud')
     ) {
       return 'card-gradient-green';
     }
     
-    // 默认返回空字符串，使用默认样式
-    return '';
+    // 默认情况下随机一个渐变色
+    const gradients = ['card-gradient-purple', 'card-gradient-orange', 'card-gradient-green'];
+    const randomIndex = Math.floor(bookmark.id.charCodeAt(0) % 3);
+    return gradients[randomIndex];
   };
 
   // 渲染标签
@@ -596,6 +629,83 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
     );
   };
 
+  // 修改renderPdfFile函数，优化PDF文件显示样式
+  const renderPdfFile = (bookmark: Bookmark) => {
+    if (!bookmark.pdfFiles) return null;
+    
+    const fileId = Object.keys(bookmark.pdfFiles)[0];
+    if (!fileId) return null;
+    
+    const file = bookmark.pdfFiles[fileId];
+    
+    return (
+      <div className="flex items-center justify-between mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors">
+        <a 
+          href={file.url} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="flex items-center text-blue-600 dark:text-blue-400 flex-1 min-w-0 group"
+        >
+          <div className="bg-blue-100 dark:bg-blue-800 p-1.5 rounded-md mr-2 group-hover:bg-blue-200 dark:group-hover:bg-blue-700 transition-colors">
+            <File className="h-3.5 w-3.5 text-blue-700 dark:text-blue-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <span className="text-xs font-medium truncate block">{file.name}</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">点击查看PDF</span>
+          </div>
+        </a>
+        <button
+          onClick={() => setPdfToDelete({bookmarkId: bookmark.id, fileId, fileName: file.name})}
+          className="ml-2 p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex-shrink-0 transition-colors"
+          aria-label="删除PDF文件"
+        >
+          <Trash className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    );
+  };
+
+  // 添加PDF上传区域组件
+  const renderPdfUploadArea = (bookmark: Bookmark, isGrid = false) => {
+    if (bookmark.pdfFiles) return null;
+    
+    const buttonId = isGrid ? `pdf-upload-grid-${bookmark.id}` : `pdf-upload-${bookmark.id}`;
+    
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <label 
+              htmlFor={buttonId}
+              className={`
+                cursor-pointer flex items-center justify-center border border-dashed 
+                border-blue-200 dark:border-blue-800 rounded-md mt-2 p-2
+                hover:bg-blue-50 dark:hover:bg-blue-900/20 group transition-colors
+                ${isGrid ? 'h-10' : 'h-9'}
+              `}
+            >
+              <input 
+                type="file" 
+                id={buttonId} 
+                accept="application/pdf" 
+                className="hidden" 
+                onChange={(e) => handleFileInputChange(e, bookmark.id)}
+                disabled={isUploading}
+              />
+              <FileUp className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400 mr-1.5 group-hover:text-blue-600 dark:group-hover:text-blue-300" />
+              <span className="text-xs text-blue-500 dark:text-blue-400 font-medium group-hover:text-blue-600 dark:group-hover:text-blue-300">
+                添加PDF文件
+              </span>
+            </label>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <p>上传与此书签相关的PDF文件</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
@@ -641,41 +751,63 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
 
   // 渲染书签列表
   const renderBookmarks = () => {
+    if (filteredBookmarks.length === 0) {
+      return (
+        <div className="text-center py-8">
+          <FileText className="h-12 w-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+            {bookmarks.length === 0 ? '还没有书签' : '没有找到匹配的书签'}
+          </h3>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">
+            {bookmarks.length === 0 
+              ? '导入或添加您的第一个书签开始使用' 
+              : '尝试使用不同的搜索条件'}
+          </p>
+        </div>
+      );
+    }
+
+    const currentPageBookmarks = getCurrentPageBookmarks();
+    
+    // 无论是列表视图还是网格视图，都使用网格布局和相同的卡片样式
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {getCurrentPageBookmarks().map(bookmark => {
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {currentPageBookmarks.map(bookmark => {
           const cardClass = getBookmarkCardClass(bookmark);
           const hasGradient = cardClass !== '';
+          const bgClass = cardClass; // 总是使用渐变背景
           
           return (
             <div 
               key={bookmark.id}
-              className="rounded-xl overflow-hidden border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
+              className="rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-all duration-200 transform hover:-translate-y-1"
             >
               <div className="flex flex-col h-full">
                 {/* 上半部分背景色区域 */}
-                <div className={`${hasGradient ? cardClass : 'bg-white dark:bg-gray-800'} p-6 h-32`}>
+                <div className={`${bgClass} p-4 h-32`}>
                   {/* 标题区域 */}
-                  <div className="mb-2">
-                    <h2 className={`text-xl font-bold leading-tight line-clamp-2 ${
-                      hasGradient ? 'text-white' : 'text-gray-900 dark:text-gray-100'
-                    }`}>
+                  <div className="mb-1">
+                    <h2 className="text-base font-bold leading-tight line-clamp-2 text-white">
                       {bookmark.title || '无标题'}
                     </h2>
                   </div>
                   
                   {/* 描述区域 */}
                   {bookmark.description && (
-                    <p className={`text-sm line-clamp-2 ${
-                      hasGradient ? 'text-white/90' : 'text-gray-600 dark:text-gray-300'
-                    }`}>
+                    <p className="text-xs line-clamp-2 text-white/90">
                       {bookmark.description}
                     </p>
                   )}
                 </div>
                 
                 {/* 下半部分白色区域 */}
-                <div className="bg-white dark:bg-gray-800 p-6 pt-4 flex-grow">
+                <div className="bg-white dark:bg-gray-800 p-3 flex-grow flex flex-col">
+                  {/* 渲染PDF文件 */}
+                  {renderPdfFile(bookmark)}
+                  
+                  {/* 渲染PDF上传区域 */}
+                  {renderPdfUploadArea(bookmark, true)}
+                  
                   {/* 添加标签和收藏集展示 */}
                   {renderTags(bookmark.id)}
                   {renderCollections(bookmark.id)}
@@ -683,7 +815,7 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
                   {/* 底部信息区域 */}
                   <div className="mt-auto">
                     {/* 分隔线 */}
-                    <div className="border-t border-gray-100 dark:border-gray-700 my-3"></div>
+                    <div className="border-t border-gray-100 dark:border-gray-700 my-1.5"></div>
                     
                     {/* 链接和操作区域 */}
                     <div className="flex items-center justify-between">
@@ -698,26 +830,28 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
                             <img 
                               src={bookmark.favicon} 
                               alt="" 
-                              className="w-4 h-4 mr-2 rounded-sm"
+                              className="w-3.5 h-3.5 mr-1.5 rounded-sm"
                               onError={(e) => {
                                 (e.target as HTMLImageElement).src = '/globe.svg';
                               }}
                             />
                           ) : (
-                            <ExternalLink className="h-4 w-4 mr-2" />
+                            <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
                           )}
-                          <span className="text-sm truncate max-w-[150px]">
+                          <span className="text-xs truncate max-w-[120px]">
                             {new URL(bookmark.url).hostname}
                           </span>
                         </div>
                       </a>
                       
-                      <button
-                        onClick={() => setBookmarkToDelete(bookmark.id)}
-                        className="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800"
-                      >
-                        <Trash className="h-4 w-4" />
-                      </button>
+                      <div className="flex items-center">
+                        <button
+                          onClick={() => setBookmarkToDelete(bookmark.id)}
+                          className="p-1 rounded-full text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                        >
+                          <Trash className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -790,6 +924,27 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction 
               onClick={() => bookmarkToDelete && handleDeleteBookmark(bookmarkToDelete)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? '删除中...' : '删除'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
+      {/* PDF删除确认对话框 */}
+      <AlertDialog open={!!pdfToDelete} onOpenChange={(open) => !open && setPdfToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除PDF</AlertDialogTitle>
+            <AlertDialogDescription>
+              您确定要删除此PDF文件吗？此操作无法撤销。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => pdfToDelete && deletePdf(pdfToDelete.bookmarkId, pdfToDelete.fileId, pdfToDelete.fileName)}
               className="bg-red-600 hover:bg-red-700"
             >
               {isDeleting ? '删除中...' : '删除'}
