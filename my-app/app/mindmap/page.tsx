@@ -16,6 +16,7 @@ import AnalysisProgress from '@/components/mindmap/AnalysisProgress';
 import { TaskStatus } from '@/types/mindmap';
 import { getUserBookmarkCategories, updateBookmarkCategory } from '@/lib/bookmarkService';
 import { apiService } from '@/lib/apiService';
+import { Footer } from '@/components/ui/footer';
 
 // 删除旧的炫酷按钮样式
 const glowingButtonStyles = {
@@ -386,205 +387,321 @@ function MindMapContent() {
   };
 
   return (
-    <div className="flex min-h-screen bg-white dark:bg-gray-900">
-      {/* 左侧边栏 */}
-      <Sidebar />
-      
-      {/* 主内容区域 */}
-      <div className="flex-1 flex flex-col">
-        {/* Top Navigation Bar - 固定在顶部 */}
-        <nav className="sticky top-0 z-30 border-b border-gray-200 bg-transparent dark:border-gray-700 shadow-sm p-2">
-          <div className="mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-3 flex-1 justify-center">
-              <SearchBar onSearch={handleSearch} />
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <ImportButton />
-              <style jsx>{`
-                @keyframes shimmer {
-                  0% { transform: translateX(-100%) skewX(-20deg); }
-                  100% { transform: translateX(200%) skewX(-20deg); }
-                }
-                .animate-shimmer { animation: shimmer 3s infinite ease-out; }
-              `}</style>
-              <button 
-                onClick={handleAnalyzeClick} 
-                disabled={isAnalyzing}
-                className={`${glowingButtonStyles.button} ${isAnalyzing ? 'opacity-80' : ''}`}
-              >
-                <div className={glowingButtonStyles.glow}></div>
-                <div className={glowingButtonStyles.shine}></div>
-                {isAnalyzing ? (
-                  <div className="flex items-center justify-center relative z-10">
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin text-white/90" />
-                    <span className={glowingButtonStyles.text}>分析中...</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center relative z-10">
-                    <Zap className={glowingButtonStyles.icon} />
-                    <span className={glowingButtonStyles.text}>AI智能分析</span>
-                  </div>
-                )}
-              </button>
-              <ThemeToggle />
-            </div>
-          </div>
-        </nav>
-
-        {/* Main Content - 改为单列布局，顶部是标签页 */}
-        <div className="flex-1 flex flex-col">
-          {/* 顶部标签页导航 */}
-          <div className="sticky top-[57px] z-20 bg-white dark:bg-gray-900 px-4 md:px-6 mt-4">
-            <div className="flex items-center border-b border-gray-200 dark:border-gray-700">
-              {isLoadingCategories ? (
-                <div className="py-3 flex items-center">
-                  <Loader2 className="h-4 w-4 animate-spin text-blue-600 mr-2" />
-                  <span className="text-sm text-gray-500">加载分类...</span>
-                </div>
-              ) : categoryError ? (
-                <div className="text-red-500 text-sm py-3">
-                  {categoryError}
-                </div>
-              ) : (
-                <div className="flex items-center overflow-x-auto scrollbar-hide">
-                  {categories.map((category) => (
-                    <div key={category.id} className="relative">
-                      {editingCategory === category.id ? (
-                        <div className="flex items-center bg-blue-50 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 rounded-md p-2 m-2 shadow-md">
-                          <input
-                            type="text"
-                            value={categoryName}
-                            onChange={(e) => setCategoryName(e.target.value)}
-                            className="w-full max-w-[150px] text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded px-2 py-1 outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 text-gray-900 dark:text-gray-100"
-                            autoFocus
-                            placeholder="输入分类名称"
-                          />
-                          <div className="flex ml-2">
-                            <Button
-                              size="sm"
-                              variant="default"
-                              onClick={handleSaveEdit}
-                              disabled={isSavingCategory}
-                              className="h-7 w-7 p-0 bg-green-500 hover:bg-green-600 text-white ml-1"
-                              title="保存修改"
-                            >
-                              {isSavingCategory ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                              )}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={handleCancelEdit}
-                              disabled={isSavingCategory}
-                              className="h-7 w-7 p-0 ml-1"
-                              title="取消编辑"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => handleCategoryClick(category.id)}
-                          className={`group relative flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
-                            selectedCategory === category.id
-                              ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                              : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                          }`}
-                        >
-                          <span className="font-medium">{category.name}</span>
-                          
-                          {/* 只对非"我的脑图"显示编辑按钮 */}
-                          {category.id !== 'all' && (
-                            <div
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEditClick(category);
-                              }}
-                              className="h-6 w-6 flex items-center justify-center cursor-pointer bg-gray-100 dark:bg-gray-700 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-full ml-1 transition-colors"
-                              title="编辑分类名称"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-pencil">
-                                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
-                                <path d="m15 5 4 4"/>
-                              </svg>
-                            </div>
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-          
-          {/* 脑图内容区域 */}
-          <div className="flex-1 overflow-hidden relative">
-            <Suspense fallback={
-              <div className="p-8 flex justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+    <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
+      <div className="flex flex-1">
+        {/* 侧边栏 */}
+        <Sidebar />
+        
+        {/* 主内容区域 */}
+        <div className="flex-1 flex flex-col overflow-hidden relative">
+          {/* 顶部导航栏 */}
+          <nav className="sticky top-0 z-30 border-b border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-700 shadow-sm p-2">
+            <div className="mx-auto flex items-center justify-between">
+              <div className="flex items-center gap-3 flex-1 justify-center">
+                <SearchBar onSearch={handleSearch} />
               </div>
-            }>
-              <div className="w-full h-[calc(100vh-110px)] relative">
-                {/* 分析状态显示 */}
-                {isAnalyzing && taskStatus && (
-                  <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 w-96 max-w-full bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-4">
-                    <AnalysisProgress status={taskStatus} />
+              
+              <div className="flex items-center gap-2">
+                <ImportButton />
+                <ThemeToggle />
+              </div>
+            </div>
+          </nav>
+          
+          {/* 脑图内容 */}
+          <div className="flex-1 overflow-auto">
+            {/* 分类选择器和脑图区域容器 */}
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-2 h-full">
+              {/* 分类选择器 - 移动屏幕上隐藏，或者使用不同的布局，可以通过按钮展开 */}
+              <div className={`${showControls ? 'md:block' : 'hidden'} md:col-span-1 p-3 border-r border-gray-200 dark:border-gray-700 overflow-y-auto`}>
+                <div className="flex flex-col space-y-1">
+                  <div className="font-medium mb-2 flex justify-between items-center">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">分类</span>
+                    <button 
+                      className="text-gray-400 hover:text-blue-500 text-xs"
+                      onClick={toggleControls}
+                    >
+                      隐藏
+                    </button>
                   </div>
-                )}
-                
-                {/* 错误信息显示 */}
-                {error && (
-                  <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 w-96 max-w-full">
-                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md flex items-center text-red-700 dark:text-red-300 p-4">
-                      <AlertCircle className="mr-2 h-5 w-5" />
-                      <span>{error}</span>
-                      <Button variant="outline" size="sm" className="ml-auto" onClick={handleRetry}>
-                        重试
-                      </Button>
-                    </div>
-
-                  </div>
-                )}
-                
-                {/* 脑图显示区域 - 占据整个空间 */}
-                <div className="w-full h-full bg-white dark:bg-gray-900 p-4">
-                  {markdownData ? (
-                    <div className="w-full h-full">
-                      <MarkMap markdown={markdownData} />
-                    </div>
-                  ) : isAnalyzing ? (
-                    <div className="flex items-center justify-center h-full flex-col">
-                      <Loader2 className="h-12 w-12 animate-spin text-blue-600 mb-4" />
-                      <p className="text-gray-500 dark:text-gray-400">加载脑图中...</p>
+                  
+                  {isLoadingCategories ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
                     </div>
                   ) : (
-                    <div className="flex items-center justify-center h-full flex-col">
-                      <p className="text-gray-500 dark:text-gray-400 mb-2">
-                        {error ? '加载失败，请重试或选择其他分类' : '请选择分类或点击"AI智能分析"'}
-                      </p>
-                      {error && (
-                        <Button 
-                          onClick={() => loadCategoryMarkdown(selectedCategory)} 
-                          variant="outline"
-                          size="sm"
-                        >
-                          重新加载
-                        </Button>
+                    <div className="space-y-1">
+                      {categories.map(category => (
+                        <div key={category.id} className="flex items-center">
+                          {editingCategory === category.id ? (
+                            <div className="flex items-center w-full">
+                              <input 
+                                type="text"
+                                value={categoryName}
+                                onChange={(e) => setCategoryName(e.target.value)}
+                                className="p-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md w-full" 
+                                autoFocus
+                              />
+                              <button 
+                                onClick={handleSaveEdit}
+                                disabled={isSavingCategory || !categoryName.trim()}
+                                className="ml-1 text-xs text-green-600 dark:text-green-500 hover:text-green-800 disabled:text-gray-400"
+                              >
+                                {isSavingCategory ? '...' : '保存'}
+                              </button>
+                              <button 
+                                onClick={handleCancelEdit}
+                                className="ml-1 text-xs text-red-600 dark:text-red-500 hover:text-red-800"
+                              >
+                                取消
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => handleCategoryClick(category.id)}
+                                className={`py-1 px-2 text-sm rounded-md flex-grow text-left ${
+                                  selectedCategory === category.id
+                                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 font-medium'
+                                    : 'text-gray-800 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                                }`}
+                              >
+                                <span 
+                                  className="inline-block w-2 h-2 rounded-full mr-2"
+                                  style={{ backgroundColor: getCategoryColor(category.id) }}
+                                ></span>
+                                {category.name}
+                              </button>
+                              
+                              {category.id !== 'all' && (
+                                <button
+                                  onClick={() => handleEditClick(category)}
+                                  className="ml-1 text-xs text-gray-400 hover:text-blue-500"
+                                >
+                                  编辑
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      ))}
+                      
+                      {categoryError && (
+                        <div className="text-red-500 text-xs mt-2 flex items-center">
+                          <AlertCircle className="h-3 w-3 mr-1" />
+                          {categoryError}
+                        </div>
                       )}
                     </div>
                   )}
                 </div>
+                
+                <div className="mt-4">
+                  <Button
+                    onClick={handleAnalyzeClick}
+                    disabled={isAnalyzing || !user}
+                    className="bg-blue-500 hover:bg-blue-600 text-white w-full flex items-center justify-center"
+                    size="sm"
+                  >
+                    <Zap className="mr-2 h-4 w-4" />
+                    {isAnalyzing ? '分析中...' : '重新分析'}
+                  </Button>
+                </div>
               </div>
-            </Suspense>
+              
+              {/* 脑图区域 */}
+              <div 
+                className={`
+                  relative
+                  md:col-span-${showControls ? '5' : '6'}
+                  flex-1 
+                  overflow-hidden
+                  bg-white 
+                  dark:bg-gray-900
+                `}
+              >
+                {/* 在小屏幕上显示的控制按钮 */}
+                <div className="md:hidden absolute top-2 left-2 z-20">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={toggleControls}
+                    className="bg-white/90 dark:bg-gray-800/90"
+                  >
+                    {showControls ? '隐藏侧栏' : '显示侧栏'}
+                  </Button>
+                </div>
+                
+                {/* 在小屏幕上，如果控制面板可见，显示浮动控制面板 */}
+                {showControls && (
+                  <div className="md:hidden fixed inset-0 bg-black/20 z-40" onClick={toggleControls}>
+                    <div 
+                      className="absolute left-0 top-0 bottom-0 w-64 bg-white dark:bg-gray-800 shadow-lg p-3 overflow-y-auto"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex flex-col space-y-1">
+                        <div className="font-medium mb-2 flex justify-between items-center">
+                          <span className="text-sm text-gray-700 dark:text-gray-300">分类</span>
+                          <button 
+                            className="text-gray-400 hover:text-blue-500 text-xs"
+                            onClick={toggleControls}
+                          >
+                            关闭
+                          </button>
+                        </div>
+                        
+                        {isLoadingCategories ? (
+                          <div className="flex items-center justify-center py-4">
+                            <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            {categories.map(category => (
+                              <div key={category.id} className="flex items-center">
+                                {editingCategory === category.id ? (
+                                  <div className="flex items-center w-full">
+                                    <input 
+                                      type="text"
+                                      value={categoryName}
+                                      onChange={(e) => setCategoryName(e.target.value)}
+                                      className="p-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md w-full" 
+                                      autoFocus
+                                    />
+                                    <button 
+                                      onClick={handleSaveEdit}
+                                      disabled={isSavingCategory || !categoryName.trim()}
+                                      className="ml-1 text-xs text-green-600 dark:text-green-500 hover:text-green-800 disabled:text-gray-400"
+                                    >
+                                      {isSavingCategory ? '...' : '保存'}
+                                    </button>
+                                    <button 
+                                      onClick={handleCancelEdit}
+                                      className="ml-1 text-xs text-red-600 dark:text-red-500 hover:text-red-800"
+                                    >
+                                      取消
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <button
+                                      onClick={() => {
+                                        handleCategoryClick(category.id);
+                                        toggleControls(); // 在移动端点击分类后关闭侧栏
+                                      }}
+                                      className={`py-1 px-2 text-sm rounded-md flex-grow text-left ${
+                                        selectedCategory === category.id
+                                          ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 font-medium'
+                                          : 'text-gray-800 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                                      }`}
+                                    >
+                                      <span 
+                                        className="inline-block w-2 h-2 rounded-full mr-2"
+                                        style={{ backgroundColor: getCategoryColor(category.id) }}
+                                      ></span>
+                                      {category.name}
+                                    </button>
+                                    
+                                    {category.id !== 'all' && (
+                                      <button
+                                        onClick={() => handleEditClick(category)}
+                                        className="ml-1 text-xs text-gray-400 hover:text-blue-500"
+                                      >
+                                        编辑
+                                      </button>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        <div className="mt-4">
+                          <Button
+                            onClick={() => {
+                              handleAnalyzeClick();
+                              toggleControls(); // 在移动端点击分析后关闭侧栏
+                            }}
+                            disabled={isAnalyzing || !user}
+                            className="bg-blue-500 hover:bg-blue-600 text-white w-full flex items-center justify-center"
+                            size="sm"
+                          >
+                            <Zap className="mr-2 h-4 w-4" />
+                            {isAnalyzing ? '分析中...' : '重新分析'}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* 脑图组件 */}
+                <div className="h-full w-full p-0 md:p-4 relative flex items-center justify-center">
+                  {isAnalyzing && taskStatus && (
+                    <AnalysisProgress
+                      status={taskStatus}
+                      onRetry={handleRetry}
+                    />
+                  )}
+                  
+                  {error && (
+                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 max-w-md mx-auto">
+                      <div className="flex">
+                        <div className="flex-shrink-0">
+                          <AlertCircle className="h-5 w-5 text-red-500" />
+                        </div>
+                        <div className="ml-3">
+                          <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                            加载脑图失败
+                          </h3>
+                          <div className="mt-2 text-sm text-red-700 dark:text-red-300">
+                            <p>{error}</p>
+                          </div>
+                          <div className="mt-4">
+                            <Button
+                              size="sm"
+                              onClick={handleRetry}
+                              className="bg-red-600 hover:bg-red-700 text-white"
+                            >
+                              重试
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {!error && !isAnalyzing && markdownData && <MarkMap markdown={markdownData} />}
+                  
+                  {!error && !isAnalyzing && !markdownData && !taskStatus && (
+                    <div className="text-center p-8">
+                      <div className="rounded-full bg-blue-50 dark:bg-blue-900/20 p-3 mx-auto w-12 h-12 flex items-center justify-center mb-4">
+                        <Zap className="h-6 w-6 text-blue-500" />
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                        分析您的书签
+                      </h3>
+                      <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+                        点击"重新分析"按钮，我们将分析您的书签并生成思维导图，帮助您更好地理解和管理您的收藏内容。
+                      </p>
+                      <div className="mt-4">
+                        <Button
+                          onClick={handleAnalyzeClick}
+                          className="bg-blue-500 hover:bg-blue-600 text-white"
+                        >
+                          <Zap className="mr-2 h-4 w-4" />
+                          开始分析
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
+      <Footer />
     </div>
   );
 }
@@ -602,11 +719,14 @@ export default function MindMapPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">加载中...</p>
+      <div className="min-h-screen flex flex-col bg-white dark:bg-gray-900">
+        <div className="flex-grow flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">加载中...</p>
+          </div>
         </div>
+        <Footer />
       </div>
     );
   }

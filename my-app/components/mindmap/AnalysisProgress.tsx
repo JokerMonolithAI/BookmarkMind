@@ -4,6 +4,7 @@ import React from 'react';
 import { Loader2 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { TaskStatus } from '@/types/mindmap';
+import { Button } from '@/components/ui/button';
 
 // 分析阶段描述
 const stageDescriptions: Record<string, string> = {
@@ -17,9 +18,11 @@ const stageDescriptions: Record<string, string> = {
 
 // 分析进度组件
 export default function AnalysisProgress({ 
-  status 
+  status,
+  onRetry 
 }: { 
-  status: TaskStatus
+  status: TaskStatus,
+  onRetry?: () => void
 }) {
   const isCompleted = status.status === 'completed';
   const isFailed = status.status === 'failed';
@@ -64,6 +67,11 @@ export default function AnalysisProgress({
           </svg>
           <h3 className="text-lg font-medium mb-2">分析失败</h3>
           <p className="text-gray-500 mb-4">{status.error || '发生未知错误'}</p>
+          {onRetry && (
+            <Button onClick={onRetry} variant="destructive">
+              重试
+            </Button>
+          )}
         </div>
       )}
     </div>

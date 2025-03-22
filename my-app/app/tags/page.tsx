@@ -10,6 +10,7 @@ import { SearchBar } from '@/components/dashboard/SearchBar';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import ImportButton from '@/components/dashboard/ImportButton';
 import { Loader2 } from 'lucide-react';
+import { Footer } from '@/components/ui/footer';
 
 export default function TagsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -71,8 +72,11 @@ export default function TagsPage() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex justify-center items-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen flex flex-col bg-background">
+        <div className="flex-grow flex justify-center items-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+        <Footer />
       </div>
     );
   }
@@ -82,32 +86,35 @@ export default function TagsPage() {
   }
 
   return (
-    <div className="flex h-screen bg-background">
-      <Sidebar />
-      
-      <div className="flex flex-col flex-1 overflow-hidden">
-        <nav className="sticky top-0 z-30 border-b border-gray-200 bg-transparent dark:border-gray-700 shadow-sm p-2">
-          <div className="mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-3 flex-1 justify-center">
-              <SearchBar onSearch={handleSearch} />
-            </div>
-            <div className="flex items-center gap-2">
-              <ImportButton />
-              <ThemeToggle />
-            </div>
-          </div>
-        </nav>
+    <div className="flex flex-col min-h-screen bg-background">
+      <div className="flex flex-1">
+        <Sidebar />
         
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
-          <TagsList
-            initialTags={filteredTags}
-            fetchTags={fetchTags}
-            onSearchChange={handleSearch}
-            isLoading={isLoading}
-            error={error || undefined}
-          />
-        </main>
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <nav className="sticky top-0 z-30 border-b border-gray-200 bg-background dark:border-gray-700 shadow-sm p-2">
+            <div className="mx-auto flex items-center justify-between">
+              <div className="flex items-center gap-3 flex-1 justify-center">
+                <SearchBar onSearch={handleSearch} />
+              </div>
+              <div className="flex items-center gap-2">
+                <ImportButton />
+                <ThemeToggle />
+              </div>
+            </div>
+          </nav>
+          
+          <main className="flex-1 overflow-y-auto p-4 md:p-6">
+            <TagsList
+              initialTags={filteredTags}
+              fetchTags={fetchTags}
+              onSearchChange={handleSearch}
+              isLoading={isLoading}
+              error={error || undefined}
+            />
+          </main>
+        </div>
       </div>
+      <Footer />
     </div>
   );
 } 

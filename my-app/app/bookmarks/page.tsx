@@ -12,6 +12,7 @@ import { Sidebar } from '@/components/dashboard/Sidebar';
 import { FilterBar } from '@/components/bookmarks/FilterBar';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { Loader2 } from 'lucide-react';
+import { Footer } from '@/components/ui/footer';
 
 // 创建一个内容组件，使用视图上下文
 function BookmarksContent() {
@@ -32,54 +33,57 @@ function BookmarksContent() {
   };
   
   return (
-    <div className="flex min-h-screen bg-white dark:bg-gray-900">
-      {/* 左侧边栏 */}
-      <Sidebar />
-      
-      {/* 主内容区域 */}
-      <div className="flex-1 flex flex-col">
-        {/* Top Navigation Bar - 固定在顶部 */}
-        <nav className="sticky top-0 z-30 border-b border-gray-200 bg-transparent dark:border-gray-700 shadow-sm p-2">
-          <div className="mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-3 flex-1 justify-center">
-              <SearchBar onSearch={handleSearch} />
+    <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
+      <div className="flex flex-1">
+        {/* 左侧边栏 */}
+        <Sidebar />
+        
+        {/* 主内容区域 */}
+        <div className="flex-1 flex flex-col">
+          {/* Top Navigation Bar - 固定在顶部 */}
+          <nav className="sticky top-0 z-30 border-b border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-700 shadow-sm p-2">
+            <div className="mx-auto flex items-center justify-between">
+              <div className="flex items-center gap-3 flex-1 justify-center">
+                <SearchBar onSearch={handleSearch} />
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <ImportButton />
+                <ThemeToggle />
+              </div>
             </div>
-            
-            <div className="flex items-center gap-2">
-              <ImportButton />
-              <ThemeToggle />
+          </nav>
+
+          {/* 功能控制栏 */}
+          <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <ViewToggle />
+              <FilterBar 
+                sortOption={sortOption} 
+                onSortChange={handleSortChange}
+                timeRange={timeRange}
+                onTimeRangeChange={handleTimeRangeChange}
+              />
             </div>
           </div>
-        </nav>
 
-        {/* 功能控制栏 */}
-        <div className="border-b border-gray-200 dark:border-gray-700 bg-transparent p-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <ViewToggle />
-            <FilterBar 
-              sortOption={sortOption} 
-              onSortChange={handleSortChange}
-              timeRange={timeRange}
-              onTimeRangeChange={handleTimeRangeChange}
-            />
+          {/* 主要内容区域 */}
+          <div className="flex-1 mx-auto w-full max-w-7xl p-4 md:p-6">
+            <Suspense fallback={
+              <div className="p-8 flex justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              </div>
+            }>
+              <BookmarkList 
+                searchQuery={searchQuery}
+                sortOption={sortOption}
+                timeRange={timeRange}
+              />
+            </Suspense>
           </div>
-        </div>
-
-        {/* 主要内容区域 */}
-        <div className="flex-1 mx-auto w-full max-w-7xl p-4 md:p-6">
-          <Suspense fallback={
-            <div className="p-8 flex justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-            </div>
-          }>
-            <BookmarkList 
-              searchQuery={searchQuery}
-              sortOption={sortOption}
-              timeRange={timeRange}
-            />
-          </Suspense>
         </div>
       </div>
+      <Footer />
     </div>
   );
 }
@@ -97,11 +101,14 @@ export default function Bookmarks() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">加载中...</p>
+      <div className="min-h-screen flex flex-col bg-white dark:bg-gray-900">
+        <div className="flex-grow flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">加载中...</p>
+          </div>
         </div>
+        <Footer />
       </div>
     );
   }
