@@ -507,22 +507,25 @@ export default function BookmarkList({
         
       if (error) throw error;
       
-      // 获取文件公共 URL
-      const { data: publicUrlData } = supabase.storage
+      // 使用 createSignedUrl 创建带有认证令牌的URL
+      // 有效期设为1年 (60 * 60 * 24 * 365 = 31536000秒)
+      const { data: signedUrlData, error: signUrlError } = await supabase.storage
         .from('bookmarks')
-        .getPublicUrl(filePath);
+        .createSignedUrl(filePath, 31536000);
         
-      if (!publicUrlData.publicUrl) throw new Error('Failed to get public URL');
+      if (signUrlError) throw signUrlError;
+      if (!signedUrlData.signedUrl) throw new Error('无法获取文件访问链接');
       
-      console.log('上传文件成功，公共URL:', publicUrlData.publicUrl);
+      console.log('上传文件成功，签名URL:', signedUrlData.signedUrl);
       
       // 更新书签添加 PDF 信息
       const pdfData = {
-        url: publicUrlData.publicUrl,
+        url: signedUrlData.signedUrl,
         name: file.name,
         addedAt: timestamp,
         storagePath: filePath,
-        size: file.size
+        size: file.size,
+        expires: Date.now() + 31536000000 // 记录URL过期时间，便于将来刷新
       };
       
       // 更新 Supabase 数据库中的书签
@@ -642,6 +645,14 @@ export default function BookmarkList({
     try {
       const pdfData = bookmark.pdf;
       
+      // 检查URL是否过期
+      const isExpired = pdfData.expires && Date.now() > pdfData.expires;
+      if (isExpired) {
+        console.log('PDF链接已过期，刷新链接中...');
+        // 使用 ref 避免在渲染过程中调用异步函数
+        setTimeout(() => refreshPdfUrl(bookmark.id, pdfData.storagePath), 100);
+      }
+      
       console.log('准备渲染PDF:', pdfData.name);
       
       // 创建一个可点击的链接，将在新窗口打开文件
@@ -661,6 +672,17 @@ export default function BookmarkList({
                   description: "文件链接无效，请尝试重新上传",
                   variant: "destructive",
                 });
+                return;
+              }
+              
+              // 检查URL是否过期
+              if (isExpired) {
+                e.preventDefault();
+                toast({
+                  title: "更新PDF链接中",
+                  description: "请稍候，正在刷新链接...",
+                });
+                return;
               }
             }}
           >
@@ -688,6 +710,76 @@ export default function BookmarkList({
           PDF加载错误，请重试
         </div>
       );
+    }
+  };
+
+  // 修复 refreshPdfUrl 函数，确保更新保留原有属性
+  const refreshPdfUrl = async (bookmarkId: string, storagePath: string) => {
+    if (!user) return;
+    
+    try {
+      // 先获取当前书签信息
+      const bookmark = bookmarks.find(b => b.id === bookmarkId);
+      if (!bookmark || !bookmark.pdf) {
+        console.error('找不到书签或PDF信息');
+        return;
+      }
+      
+      const currentPdf = bookmark.pdf;
+      
+      // 使用 createSignedUrl 创建新的访问URL
+      const { data, error } = await supabase.storage
+        .from('bookmarks')
+        .createSignedUrl(storagePath, 31536000); // 一年有效期
+        
+      if (error) throw error;
+      if (!data.signedUrl) throw new Error('无法创建新的访问链接');
+      
+      // 更新书签中的PDF URL，保留原有属性
+      const updatedPdf = {
+        ...currentPdf,
+        url: data.signedUrl,
+        expires: Date.now() + 31536000000
+      };
+      
+      // 更新数据库
+      const { error: updateError } = await supabase
+        .from('bookmarks')
+        .update({ pdf: updatedPdf })
+        .eq('id', bookmarkId)
+        .eq('user_id', user.id);
+        
+      if (updateError) throw updateError;
+      
+      // 更新本地状态
+      const updateBookmarkState = (bookmarks: Bookmark[]) => 
+        bookmarks.map(b => {
+          if (b.id === bookmarkId && b.pdf) {
+            return {
+              ...b,
+              pdf: updatedPdf
+            };
+          }
+          return b;
+        });
+      
+      setBookmarks(updateBookmarkState);
+      setFilteredBookmarks(updateBookmarkState);
+      
+      console.log('已刷新PDF链接:', data.signedUrl);
+      
+      toast({
+        title: "PDF链接已更新",
+        description: "现在可以访问PDF文件了",
+      });
+      
+    } catch (error) {
+      console.error('刷新PDF链接失败:', error);
+      toast({
+        title: "更新链接失败",
+        description: "请重新打开页面或尝试重新上传文件",
+        variant: "destructive",
+      });
     }
   };
 

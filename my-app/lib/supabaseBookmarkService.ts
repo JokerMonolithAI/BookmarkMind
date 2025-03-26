@@ -22,6 +22,7 @@ export interface Bookmark extends BookmarkType {
     addedAt: number;
     storagePath: string;
     size?: number;
+    expires?: number;
   };
   analysis?: {
     category?: string;
