@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Tag, getUserTags } from '@/lib/tagService';
+import { Tag, getUserTags } from '@/lib/supabaseTagService';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/dashboard/Sidebar';
@@ -13,13 +13,14 @@ import { Loader2 } from 'lucide-react';
 import { Footer } from '@/components/ui/footer';
 
 export default function TagsPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
   const [tags, setTags] = useState<Tag[]>([]);
   const [filteredTags, setFilteredTags] = useState<Tag[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [authLoading, setAuthLoading] = useState(true);
 
   // 获取用户的所有标签
   const fetchTags = async () => {
@@ -27,7 +28,7 @@ export default function TagsPage() {
     
     try {
       setIsLoading(true);
-      const tagsData = await getUserTags(user.uid);
+      const tagsData = await getUserTags(user.id);
       return tagsData;
     } catch (error) {
       console.error('Error fetching tags:', error);
@@ -45,13 +46,22 @@ export default function TagsPage() {
       setFilteredTags(tagsData);
     };
 
+    // 检查身份验证状态
     if (user) {
+      setAuthLoading(false);
       loadTags();
-    } else if (!authLoading) {
-      // 用户未登录且认证加载完成，重定向到登录页面
-      router.push('/login');
+    } else {
+      // 假设如果没有用户，我们延迟一个短时间来检查是否正在加载
+      const timer = setTimeout(() => {
+        setAuthLoading(false);
+        if (!user) {
+          router.push('/login');
+        }
+      }, 500);
+      
+      return () => clearTimeout(timer);
     }
-  }, [user, authLoading, router]);
+  }, [user, router]);
 
   // 根据搜索查询过滤标签
   const handleSearch = (query: string) => {

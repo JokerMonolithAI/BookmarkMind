@@ -87,7 +87,7 @@ export function CreateFolderDialog({
         folderData.parentId = parentId;
       }
       
-      await createFolder(user.uid, collectionId, folderData);
+      await createFolder(user.id, collectionId, folderData);
       
       resetForm();
       onCreated();

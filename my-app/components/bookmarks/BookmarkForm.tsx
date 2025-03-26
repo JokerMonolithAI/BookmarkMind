@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { Bookmark } from '@/lib/bookmarkService';
-import { Tag, getBookmarkTags, addTagToBookmark, removeTagFromBookmark } from '@/lib/tagService';
+import { Bookmark } from '@/lib/supabaseBookmarkService';
+import { Tag, getBookmarkTags, addTagToBookmark, removeTagFromBookmark } from '@/lib/supabaseTagService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,7 +41,8 @@ export function BookmarkForm({
       const fetchTags = async () => {
         try {
           setIsLoadingTags(true);
-          const tags = await getBookmarkTags(user.uid, bookmark.id);
+          const bookmarkId = bookmark.id as string; // 确保 bookmarkId 不为 undefined
+          const tags = await getBookmarkTags(user.id, bookmarkId);
           setSelectedTags(tags);
         } catch (error) {
           console.error('Error fetching bookmark tags:', error);

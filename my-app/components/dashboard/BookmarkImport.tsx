@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { saveUserBookmarks, Bookmark as ServiceBookmark } from '@/lib/bookmarkService';
+import { saveUserBookmarks, Bookmark as ServiceBookmark } from '@/lib/supabaseBookmarkService';
 import { apiService } from '@/lib/apiService';
 import { eventService, EVENTS } from '@/lib/eventService';
 import { Button } from '@/components/ui/button';
@@ -123,7 +123,7 @@ export default function BookmarkImport() {
         bookmarksObject[id] = {
           ...bookmark,
           id,
-          userId: user.uid,
+          userId: user.id,
           updatedAt: new Date().toISOString(),
           visitCount: 0,
           isRead: false,
@@ -137,7 +137,7 @@ export default function BookmarkImport() {
       
       // 3. 与数据库中的书签对比去重并保存
       console.time('saveUserBookmarks');
-      const result = await saveUserBookmarks(user.uid, bookmarksObject, {});
+      const result = await saveUserBookmarks(user.id, bookmarksObject, {});
       console.timeEnd('saveUserBookmarks');
       
       // 更新进度 - 保存完成

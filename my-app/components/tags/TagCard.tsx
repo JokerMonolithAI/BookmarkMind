@@ -11,7 +11,7 @@ import {
   Bookmark, 
   Clock 
 } from 'lucide-react';
-import { Tag, deleteTag } from '@/lib/tagService';
+import { Tag, deleteTag } from '@/lib/supabaseTagService';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -61,7 +61,7 @@ export function TagCard({ tag, onDeleted }: TagCardProps) {
     
     try {
       setIsDeleting(true);
-      await deleteTag(user.uid, tag.id);
+      await deleteTag(user.id, tag.id);
       onDeleted();
     } catch (error) {
       console.error('Error deleting tag:', error);

@@ -14,7 +14,9 @@ export interface BookmarkFolder {
   id: string
   name: string
   parentId?: string
-  createdAt: number
+  color?: string
+  icon?: string
+  createdAt?: number
 }
 
 export interface UserBookmarkData {

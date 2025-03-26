@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2, Sparkles, ChevronDown } from 'lucide-react';
-import { createCollection } from '@/lib/collectionService';
+import { createCollection } from '@/lib/supabaseCollectionService';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -87,7 +87,7 @@ export function CreateCollectionDialog({
       setIsSubmitting(true);
       setError('');
       
-      await createCollection(user.uid, {
+      await createCollection(user.id, {
         name: name.trim(),
         description: description.trim() || undefined,
       });

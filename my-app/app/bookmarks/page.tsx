@@ -90,16 +90,16 @@ function BookmarksContent() {
 
 // 主 Bookmarks 组件
 export default function Bookmarks() {
-  const { user, loading } = useAuth();
+  const { user, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!isLoading && !user) {
       router.push('/login');
     }
-  }, [user, loading, router]);
+  }, [user, isLoading, router]);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col bg-white dark:bg-gray-900">
         <div className="flex-grow flex items-center justify-center">

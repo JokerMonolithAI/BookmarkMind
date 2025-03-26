@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { Tag, updateTag, TAG_COLORS } from '@/lib/tagService';
+import { Tag, updateTag, TAG_COLORS } from '@/lib/supabaseTagService';
 import {
   Dialog,
   DialogContent,
@@ -66,7 +66,7 @@ export function EditTagDialog({ open, onOpenChange, tag, onUpdated }: EditTagDia
     try {
       setIsLoading(true);
       
-      await updateTag(user.uid, tag.id, {
+      await updateTag(user.id, tag.id, {
         name,
         color,
         bgColor: customColor

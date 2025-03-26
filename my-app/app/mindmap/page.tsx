@@ -95,7 +95,7 @@ function MindMapContent() {
       
       try {
         // 获取用户的所有书签分类
-        const categoryList = await getUserBookmarkCategories(user.uid);
+        const categoryList = await getUserBookmarkCategories(user.id);
         
         // 将分类数据转换为组件所需的格式
         const formattedCategories = categoryList.map((category, index) => ({
@@ -203,7 +203,7 @@ function MindMapContent() {
     
     try {
       // 更新数据库中的分类
-      await updateBookmarkCategory(user.uid, originalCategoryName, categoryName);
+      await updateBookmarkCategory(user.id, originalCategoryName, categoryName);
       
       // 更新本地分类列表
       setCategories(prevCategories => 
@@ -708,16 +708,16 @@ function MindMapContent() {
 
 // 主 MindMap 页面组件
 export default function MindMapPage() {
-  const { user, loading } = useAuth();
+  const { user, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!isLoading && !user) {
       router.push('/login');
     }
-  }, [user, loading, router]);
+  }, [user, isLoading, router]);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col bg-white dark:bg-gray-900">
         <div className="flex-grow flex items-center justify-center">

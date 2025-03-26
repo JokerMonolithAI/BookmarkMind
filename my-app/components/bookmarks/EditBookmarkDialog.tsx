@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { Bookmark } from '@/lib/bookmarkService';
-import { Tag, addTagToBookmark, removeTagFromBookmark, getBookmarkTags } from '@/lib/tagService';
+import { Bookmark } from '@/lib/supabaseBookmarkService';
+import { Tag, addTagToBookmark, removeTagFromBookmark, getBookmarkTags } from '@/lib/supabaseTagService';
 import { BookmarkForm } from './BookmarkForm';
 import {
   Dialog,
@@ -62,7 +62,7 @@ export function EditBookmarkDialog({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          userId: user.uid,
+          userId: user.id,
           title: updatedBookmark.title,
           url: updatedBookmark.url,
           description: updatedBookmark.description || ''
@@ -74,7 +74,7 @@ export function EditBookmarkDialog({
       }
       
       // 获取当前书签的标签
-      const currentTags = await getBookmarkTags(user.uid, currentBookmark.id);
+      const currentTags = await getBookmarkTags(user.id, currentBookmark.id);
       
       // 比较当前标签和新标签
       const tagsToAdd = tags.filter(tag => !currentTags.some(t => t.id === tag.id));
@@ -82,12 +82,12 @@ export function EditBookmarkDialog({
       
       // 添加新标签
       for (const tag of tagsToAdd) {
-        await addTagToBookmark(user.uid, currentBookmark.id, tag.id);
+        await addTagToBookmark(user.id, currentBookmark.id, tag.id);
       }
       
       // 移除已删除的标签
       for (const tag of tagsToRemove) {
-        await removeTagFromBookmark(user.uid, currentBookmark.id, tag.id);
+        await removeTagFromBookmark(user.id, currentBookmark.id, tag.id);
       }
       
       toast({

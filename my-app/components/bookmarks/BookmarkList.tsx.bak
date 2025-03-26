@@ -1,23 +1,17 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react';
+import { FileText, ExternalLink, Trash, Loader2, FileUp, File } from 'lucide-react';
+import { eventService, EVENTS } from '@/lib/eventService';
 import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
 import { ref, get, remove, update } from 'firebase/database';
 import { Button } from '@/components/ui/button';
-import { 
-  Trash, 
-  FileUp, 
-  ExternalLink, 
-  FileText,
-  File,
-} from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
-import { useView } from './ViewToggle';
-import ImportButton from './ImportButton';
-import { eventService, EVENTS } from '@/lib/eventService';
-// 导入Firebase Storage相关函数
-import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
+import { useView } from '@/components/bookmarks/ViewToggle';
+import { Tag, getBookmarkTags } from '@/lib/supabaseTagService';
+import { getBookmarkCollections } from '@/lib/supabaseCollectionService';
+import { Badge } from '@/components/ui/badge';
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -28,12 +22,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { Progress } from "@/components/ui/progress";
-// 导入标签和收藏集相关功能
-import { Tag, getBookmarkTags } from '@/lib/tagService';
-import { getBookmarkCollections } from '@/lib/collectionService';
-import { Badge } from '@/components/ui/badge';
-// 导入Tooltip组件
 import { 
   Tooltip,
   TooltipContent,
@@ -41,7 +31,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-// 在本地定义 Bookmark 接口，添加PDF相关字段
+// 定义书签接口
 interface Bookmark {
   id: string;
   url: string;
@@ -72,9 +62,15 @@ interface BookmarkMetadata {
 
 interface BookmarkListProps {
   searchQuery?: string;
+  sortOption?: 'date' | 'title';
+  timeRange?: 'all' | 'today' | 'week' | 'month';
 }
 
-export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
+export default function BookmarkList({
+  searchQuery = '',
+  sortOption = 'date',
+  timeRange = 'all'
+}: BookmarkListProps) {
   const { user } = useAuth();
   const { activeView } = useView();
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
@@ -82,25 +78,26 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
   const [loading, setLoading] = useState(true);
   const [bookmarkToDelete, setBookmarkToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [uploadingBookmarkId, setUploadingBookmarkId] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [isUploading, setIsUploading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(12);
   // 添加标签和收藏集的状态
   const [bookmarkMetadata, setBookmarkMetadata] = useState<{[key: string]: BookmarkMetadata}>({});
   const [loadingMetadata, setLoadingMetadata] = useState<{[key: string]: boolean}>({});
+  // 添加上传相关的状态
+  const [uploadingBookmarkId, setUploadingBookmarkId] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
   const [pdfToDelete, setPdfToDelete] = useState<{bookmarkId: string, fileId: string, fileName: string} | null>(null);
 
   // 获取书签数据
   const fetchBookmarks = useCallback(async () => {
     if (!user) return;
-
+    
     try {
       setLoading(true);
-      const bookmarksRef = ref(db, `users/${user.uid}/bookmarks`);
+      const bookmarksRef = ref(db, `users/${user.id}/bookmarks`);
       const snapshot = await get(bookmarksRef);
-
+      
       if (snapshot.exists()) {
         const data = snapshot.val();
         const bookmarksArray: Bookmark[] = [];
@@ -114,19 +111,17 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
             });
           }
         });
-
+        
         // 按添加时间排序，最新的在前面
         bookmarksArray.sort((a, b) => {
           const timeA = a.addedAt || a.createdAt || 0;
           const timeB = b.addedAt || b.createdAt || 0;
           return timeB - timeA;
         });
-
+        
         setBookmarks(bookmarksArray);
-        setFilteredBookmarks(bookmarksArray);
       } else {
         setBookmarks([]);
-        setFilteredBookmarks([]);
       }
     } catch (error) {
       console.error('Error fetching bookmarks:', error);
@@ -140,16 +135,17 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
     }
   }, [user]);
 
-  // 初始加载
+  // 初始加载和事件订阅
   useEffect(() => {
     if (user) {
       fetchBookmarks();
       
-      // 订阅书签导入成功事件
+      // 处理书签导入成功事件
       const handleBookmarksImported = () => {
         fetchBookmarks();
       };
       
+      // 订阅事件
       eventService.subscribe(EVENTS.BOOKMARKS_IMPORTED, handleBookmarksImported);
       
       // 组件卸载时取消订阅
@@ -159,35 +155,80 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
     }
   }, [user, fetchBookmarks]);
 
-  // 订阅书签删除事件
+  // 根据搜索、排序和时间范围过滤书签
   useEffect(() => {
-    const handleBookmarkDeleted = () => {
-      fetchBookmarks();
-    };
-    
-    eventService.subscribe(EVENTS.BOOKMARK_DELETED, handleBookmarkDeleted);
-    
-    return () => {
-      eventService.unsubscribe(EVENTS.BOOKMARK_DELETED, handleBookmarkDeleted);
-    };
-  }, [user]);
-
-  // 处理搜索过滤
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFilteredBookmarks(bookmarks);
+    if (!bookmarks.length) {
+      setFilteredBookmarks([]);
       return;
     }
 
-    const lowercaseQuery = searchQuery.toLowerCase();
-    const filtered = bookmarks.filter(bookmark => 
-      bookmark.title?.toLowerCase().includes(lowercaseQuery) || 
-      bookmark.url.toLowerCase().includes(lowercaseQuery) ||
-      bookmark.description?.toLowerCase().includes(lowercaseQuery)
-    );
+    let filtered = [...bookmarks];
+
+    // 应用搜索过滤
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(bookmark => 
+        bookmark.title?.toLowerCase().includes(query) || 
+        bookmark.description?.toLowerCase().includes(query) ||
+        bookmark.url?.toLowerCase().includes(query)
+      );
+    }
+
+    // 应用时间范围过滤
+    if (timeRange !== 'all') {
+      const now = new Date();
+      let startTime: Date;
+
+      switch (timeRange) {
+        case 'today':
+          startTime = new Date(now.setHours(0, 0, 0, 0));
+          break;
+        case 'week':
+          // 获取本周一
+          const day = now.getDay() || 7; // 如果是周日，getDay()返回0，我们将其视为7
+          startTime = new Date(now);
+          startTime.setDate(now.getDate() - day + 1);
+          startTime.setHours(0, 0, 0, 0);
+          break;
+        case 'month':
+          // 获取本月第一天
+          startTime = new Date(now.getFullYear(), now.getMonth(), 1);
+          break;
+        default:
+          startTime = new Date(0); // 1970年1月1日
+      }
+
+      const startTimestamp = startTime.getTime();
+      filtered = filtered.filter(bookmark => {
+        const bookmarkTime = bookmark.addedAt || bookmark.createdAt || 0;
+        // 检查时间戳是否为秒级（10位数），如果是则转换为毫秒级（13位数）
+        const normalizedTimestamp = bookmarkTime.toString().length === 10 
+          ? bookmarkTime * 1000 
+          : bookmarkTime;
+        return normalizedTimestamp >= startTimestamp;
+      });
+    }
+
+    // 应用排序
+    if (sortOption === 'title') {
+      filtered.sort((a, b) => {
+        const titleA = a.title || '';
+        const titleB = b.title || '';
+        return titleA.localeCompare(titleB);
+      });
+    } else {
+      // 默认按日期排序
+      filtered.sort((a, b) => {
+        const timeA = a.addedAt || a.createdAt || 0;
+        const timeB = b.addedAt || b.createdAt || 0;
+        return timeB - timeA;
+      });
+    }
 
     setFilteredBookmarks(filtered);
-  }, [searchQuery, bookmarks]);
+    // 重置到第一页
+    setCurrentPage(1);
+  }, [bookmarks, searchQuery, sortOption, timeRange]);
 
   // 删除书签
   const handleDeleteBookmark = async (bookmarkId: string) => {
@@ -196,33 +237,8 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
     try {
       setIsDeleting(true);
       
-      // 获取书签数据，检查是否有PDF需要删除
-      const bookmarkRef = ref(db, `users/${user.uid}/bookmarks/${bookmarkId}`);
-      const snapshot = await get(bookmarkRef);
-      
-      if (snapshot.exists()) {
-        const bookmarkData = snapshot.val();
-        
-        // 如果有PDF文件，先删除Storage中的文件
-        if (bookmarkData.pdfFiles) {
-          const storage = getStorage();
-          
-          for (const fileId in bookmarkData.pdfFiles) {
-            const fileData = bookmarkData.pdfFiles[fileId];
-            if (fileData.storagePath) {
-              try {
-                const fileRef = storageRef(storage, fileData.storagePath);
-                await deleteObject(fileRef);
-              } catch (error) {
-                console.error('Error deleting PDF file:', error);
-              }
-            }
-          }
-        }
-      }
-      
       // 删除书签数据
-      await remove(ref(db, `users/${user.uid}/bookmarks/${bookmarkId}`));
+      await remove(ref(db, `users/${user.id}/bookmarks/${bookmarkId}`));
       
       // 更新本地状态
       setBookmarks(prev => prev.filter(bookmark => bookmark.id !== bookmarkId));
@@ -248,7 +264,208 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
     }
   };
 
-  // 处理PDF上传
+  // 分页相关函数
+  const totalPages = Math.ceil(filteredBookmarks.length / itemsPerPage);
+  
+  const getCurrentPageBookmarks = () => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredBookmarks.slice(startIndex, endIndex);
+  };
+  
+  const goToPage = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  // 获取书签的标签和收藏集
+  const fetchBookmarkMetadata = useCallback(async (bookmarkId: string) => {
+    if (!user || loadingMetadata[bookmarkId]) return;
+    
+    setLoadingMetadata(prev => ({ ...prev, [bookmarkId]: true }));
+    
+    try {
+      // 获取书签的标签
+      const tags = await getBookmarkTags(user.id, bookmarkId);
+      
+      // 获取书签所属的收藏集
+      const collectionIds = await getBookmarkCollections(user.id, bookmarkId);
+      
+      // 获取收藏集名称
+      const collections: {id: string, name: string}[] = [];
+      
+      if (collectionIds.length > 0) {
+        for (const id of collectionIds) {
+          const collectionRef = ref(db, `users/${user.id}/collections/${id}`);
+          const snapshot = await get(collectionRef);
+          
+          if (snapshot.exists()) {
+            collections.push({
+              id,
+              name: snapshot.val().name
+            });
+          }
+        }
+      }
+      
+      // 更新状态
+      setBookmarkMetadata(prev => ({
+        ...prev,
+        [bookmarkId]: { tags, collections }
+      }));
+    } catch (error) {
+      console.error('Error fetching bookmark metadata:', error);
+      // 即使出错也更新状态，避免重复请求
+      setBookmarkMetadata(prev => ({
+        ...prev,
+        [bookmarkId]: { tags: [], collections: [] }
+      }));
+    } finally {
+      setLoadingMetadata(prev => ({ ...prev, [bookmarkId]: false }));
+    }
+  }, [user, loadingMetadata]);
+
+  // 在 useEffect 中预加载当前页的书签元数据
+  useEffect(() => {
+    if (!user || !filteredBookmarks.length) return;
+
+    const currentPageBookmarks = getCurrentPageBookmarks();
+    currentPageBookmarks.forEach(bookmark => {
+      if (!bookmarkMetadata[bookmark.id] && !loadingMetadata[bookmark.id]) {
+        fetchBookmarkMetadata(bookmark.id);
+      }
+    });
+  }, [user, filteredBookmarks, currentPage, bookmarkMetadata, loadingMetadata, fetchBookmarkMetadata]);
+
+  // 格式化日期
+  const formatDate = (timestamp: number) => {
+    if (!timestamp) return '未知日期';
+    
+    // 检查时间戳是否为秒级（10位数），如果是则转换为毫秒级（13位数）
+    const normalizedTimestamp = timestamp.toString().length === 10 
+      ? timestamp * 1000 
+      : timestamp;
+    
+    const date = new Date(normalizedTimestamp);
+    return date.toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+  
+  // 添加一个函数来确定书签类型并返回对应的CSS类名
+  const getBookmarkCardClass = (bookmark: Bookmark) => {
+    const url = bookmark.url.toLowerCase();
+    const title = (bookmark.title || '').toLowerCase();
+    
+    // 开发工具类 - 紫色渐变
+    if (
+      url.includes('github.com') || 
+      url.includes('stackoverflow.com') || 
+      url.includes('vscode') || 
+      url.includes('code') ||
+      url.includes('dev.') ||
+      url.includes('translate.google') ||
+      title.includes('工具') ||
+      title.includes('翻译')
+    ) {
+      return 'card-gradient-purple';
+    }
+    
+    // 人工智能类 - 橙色渐变
+    if (
+      url.includes('ai') || 
+      url.includes('openai') || 
+      url.includes('gpt') || 
+      url.includes('claude') ||
+      url.includes('llm') ||
+      url.includes('feishu') ||
+      title.includes('ai') ||
+      title.includes('人工智能') ||
+      title.includes('机器学习')
+    ) {
+      return 'card-gradient-orange';
+    }
+    
+    // 开发框架类 - 绿色渐变
+    if (
+      url.includes('react') || 
+      url.includes('vue') || 
+      url.includes('angular') || 
+      url.includes('next') ||
+      url.includes('framework') ||
+      url.includes('platform') ||
+      url.includes('kancloud') ||
+      title.includes('框架') ||
+      title.includes('platform')
+    ) {
+      return 'card-gradient-green';
+    }
+    
+    // 默认返回空字符串，使用默认样式
+    return '';
+  };
+
+  // 渲染标签
+  const renderTags = (bookmarkId: string) => {
+    const metadata = bookmarkMetadata[bookmarkId];
+    
+    if (!metadata || metadata.tags.length === 0) {
+      return null;
+    }
+    
+    return (
+      <div className="flex flex-wrap gap-1 mt-1.5">
+        {metadata.tags.slice(0, 3).map(tag => (
+          <Badge 
+            key={tag.id}
+            style={{ 
+              backgroundColor: tag.bgColor,
+              color: tag.textColor
+            }}
+            className="text-xs px-1.5 py-0.5 h-4"
+          >
+            {tag.name}
+          </Badge>
+        ))}
+        {metadata.tags.length > 3 && (
+          <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-4">
+            +{metadata.tags.length - 3}
+          </Badge>
+        )}
+      </div>
+    );
+  };
+  
+  // 渲染收藏集
+  const renderCollections = (bookmarkId: string) => {
+    const metadata = bookmarkMetadata[bookmarkId];
+    
+    if (!metadata || metadata.collections.length === 0) {
+      return null;
+    }
+    
+    return (
+      <div className="flex flex-wrap gap-1 mt-1">
+        {metadata.collections.slice(0, 2).map(collection => (
+          <Badge 
+            key={collection.id}
+            variant="secondary"
+            className="text-xs px-1.5 py-0.5 h-4"
+          >
+            {collection.name}
+          </Badge>
+        ))}
+        {metadata.collections.length > 2 && (
+          <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-4">
+            +{metadata.collections.length - 2}
+          </Badge>
+        )}
+      </div>
+    );
+  };
+
+  // 添加处理PDF上传的函数
   const handlePdfUpload = async (bookmarkId: string, file: File) => {
     if (!user || isUploading) return;
     
@@ -282,7 +499,7 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
       
       const storage = getStorage();
       const timestamp = Date.now();
-      const filePath = `users/${user.uid}/pdfs/${bookmarkId}/${timestamp}_${file.name}`;
+      const filePath = `users/${user.id}/pdfs/${bookmarkId}/${timestamp}_${file.name}`;
       const fileRef = storageRef(storage, filePath);
       
       // 创建上传任务
@@ -309,7 +526,7 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
           
           // 更新书签数据，添加PDF信息
-          const bookmarkRef = ref(db, `users/${user.uid}/bookmarks/${bookmarkId}`);
+          const bookmarkRef = ref(db, `users/${user.id}/bookmarks/${bookmarkId}`);
           
           const fileId = `pdf_${timestamp}`;
           const pdfFiles = {
@@ -357,17 +574,7 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
     }
   };
 
-  // 添加文件上传处理器
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>, bookmarkId: string) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      handlePdfUpload(bookmarkId, file);
-    }
-    // 清空文件输入，以便可以再次选择同一文件
-    e.target.value = '';
-  };
-
-  // 更新deletePdf函数，确保完全删除文件
+  // 添加文件删除函数
   const deletePdf = async (bookmarkId: string, fileId: string, fileName: string) => {
     if (!user || isDeleting) return;
     
@@ -375,7 +582,7 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
       setIsDeleting(true);
       
       // 获取书签数据
-      const bookmarkRef = ref(db, `users/${user.uid}/bookmarks/${bookmarkId}`);
+      const bookmarkRef = ref(db, `users/${user.id}/bookmarks/${bookmarkId}`);
       const bookmark = bookmarks.find(b => b.id === bookmarkId);
       
       if (bookmark?.pdfFiles && bookmark.pdfFiles[fileId]) {
@@ -420,216 +627,17 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
     }
   };
 
-  // 获取书签的标签和收藏集
-  const fetchBookmarkMetadata = useCallback(async (bookmarkId: string) => {
-    if (!user || loadingMetadata[bookmarkId]) return;
-    
-    setLoadingMetadata(prev => ({ ...prev, [bookmarkId]: true }));
-    
-    try {
-      // 获取书签的标签
-      const tags = await getBookmarkTags(user.uid, bookmarkId);
-      
-      // 获取书签所属的收藏集
-      const collectionIds = await getBookmarkCollections(user.uid, bookmarkId);
-      
-      // 获取收藏集名称
-      const collections: {id: string, name: string}[] = [];
-      
-      if (collectionIds.length > 0) {
-        for (const id of collectionIds) {
-          const collectionRef = ref(db, `users/${user.uid}/collections/${id}`);
-          const snapshot = await get(collectionRef);
-          
-          if (snapshot.exists()) {
-            collections.push({
-              id,
-              name: snapshot.val().name
-            });
-          }
-        }
-      }
-      
-      // 更新状态
-      setBookmarkMetadata(prev => ({
-        ...prev,
-        [bookmarkId]: { tags, collections }
-      }));
-    } catch (error) {
-      console.error('Error fetching bookmark metadata:', error);
-      // 即使出错也更新状态，避免重复请求
-      setBookmarkMetadata(prev => ({
-        ...prev,
-        [bookmarkId]: { tags: [], collections: [] }
-      }));
-    } finally {
-      setLoadingMetadata(prev => ({ ...prev, [bookmarkId]: false }));
+  // 文件上传处理器
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>, bookmarkId: string) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handlePdfUpload(bookmarkId, file);
     }
-  }, [user, loadingMetadata]);
-
-  // 在 useEffect 中预加载当前页的书签元数据
-  useEffect(() => {
-    if (!user || !filteredBookmarks.length) return;
-
-    const currentPageBookmarks = getCurrentPageBookmarks();
-    currentPageBookmarks.forEach(bookmark => {
-      if (!bookmarkMetadata[bookmark.id] && !loadingMetadata[bookmark.id]) {
-        fetchBookmarkMetadata(bookmark.id);
-      }
-    });
-  }, [user, filteredBookmarks, currentPage, bookmarkMetadata, loadingMetadata, fetchBookmarkMetadata]);
-
-  // 获取当前页的书签
-  const getCurrentPageBookmarks = () => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return filteredBookmarks.slice(startIndex, endIndex);
+    // 清空文件输入，以便可以再次选择同一文件
+    e.target.value = '';
   };
 
-  // 处理翻页
-  const goToPage = (page: number) => {
-    setCurrentPage(page);
-  };
-
-  // 格式化日期
-  const formatDate = (timestamp: number) => {
-    if (!timestamp) return '未知日期';
-    
-    // 检查时间戳是否为秒级（10位数），如果是则转换为毫秒级（13位数）
-    const normalizedTimestamp = timestamp.toString().length === 10 
-      ? timestamp * 1000 
-      : timestamp;
-    
-    const date = new Date(normalizedTimestamp);
-    return date.toLocaleDateString('zh-CN', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-  
-  // 在renderBookmarks函数中，修改书签卡片的渲染方式
-  // 添加一个函数来确定书签类型并返回对应的CSS类名
-  const getBookmarkCardClass = (bookmark: Bookmark) => {
-    const url = bookmark.url.toLowerCase();
-    const title = (bookmark.title || '').toLowerCase();
-    
-    // 开发工具类 - 紫色渐变
-    if (
-      url.includes('github.com') || 
-      url.includes('stackoverflow.com') || 
-      url.includes('vscode') || 
-      url.includes('code') ||
-      url.includes('dev.') ||
-      url.includes('translate.google') ||
-      title.includes('工具') ||
-      title.includes('翻译') ||
-      title.includes('google')
-    ) {
-      return 'card-gradient-purple';
-    }
-    
-    // 人工智能类 - 橙色渐变
-    if (
-      url.includes('ai') || 
-      url.includes('openai') || 
-      url.includes('gpt') || 
-      url.includes('claude') ||
-      url.includes('llm') ||
-      url.includes('feishu') ||
-      title.includes('ai') ||
-      title.includes('人工智能') ||
-      title.includes('机器学习') ||
-      title.includes('agi') ||
-      title.includes('飞书')
-    ) {
-      return 'card-gradient-orange';
-    }
-    
-    // 开发框架类 - 绿色渐变
-    if (
-      url.includes('react') || 
-      url.includes('vue') || 
-      url.includes('angular') || 
-      url.includes('next') ||
-      url.includes('framework') ||
-      url.includes('platform') ||
-      url.includes('kancloud') ||
-      title.includes('框架') ||
-      title.includes('platform') ||
-      title.includes('前言') ||
-      title.includes('capacity') ||
-      title.includes('cloud')
-    ) {
-      return 'card-gradient-green';
-    }
-    
-    // 默认情况下随机一个渐变色
-    const gradients = ['card-gradient-purple', 'card-gradient-orange', 'card-gradient-green'];
-    const randomIndex = Math.floor(bookmark.id.charCodeAt(0) % 3);
-    return gradients[randomIndex];
-  };
-
-  // 渲染标签
-  const renderTags = (bookmarkId: string) => {
-    const metadata = bookmarkMetadata[bookmarkId];
-    
-    if (!metadata || metadata.tags.length === 0) {
-      return null;
-    }
-    
-    return (
-      <div className="flex flex-wrap gap-1 mt-1.5 mb-2">
-        {metadata.tags.slice(0, 3).map(tag => (
-          <Badge 
-            key={tag.id}
-            style={{ 
-              backgroundColor: tag.bgColor,
-              color: tag.textColor
-            }}
-            className="text-xs px-1.5 py-0.5 h-4"
-          >
-            {tag.name}
-          </Badge>
-        ))}
-        {metadata.tags.length > 3 && (
-          <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-4">
-            +{metadata.tags.length - 3}
-          </Badge>
-        )}
-      </div>
-    );
-  };
-  
-  // 渲染收藏集
-  const renderCollections = (bookmarkId: string) => {
-    const metadata = bookmarkMetadata[bookmarkId];
-    
-    if (!metadata || metadata.collections.length === 0) {
-      return null;
-    }
-    
-    return (
-      <div className="flex flex-wrap gap-1 mt-1 mb-2">
-        {metadata.collections.slice(0, 2).map(collection => (
-          <Badge 
-            key={collection.id}
-            variant="secondary"
-            className="text-xs px-1.5 py-0.5 h-4"
-          >
-            {collection.name}
-          </Badge>
-        ))}
-        {metadata.collections.length > 2 && (
-          <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-4">
-            +{metadata.collections.length - 2}
-          </Badge>
-        )}
-      </div>
-    );
-  };
-
-  // 修改renderPdfFile函数，优化PDF文件显示样式
+  // 渲染PDF文件
   const renderPdfFile = (bookmark: Bookmark) => {
     if (!bookmark.pdfFiles) return null;
     
@@ -665,7 +673,7 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
     );
   };
 
-  // 添加PDF上传区域组件
+  // 修改网格视图中的PDF上传按钮 - 针对没有PDF的情况显示上传区域
   const renderPdfUploadArea = (bookmark: Bookmark, isGrid = false) => {
     if (bookmark.pdfFiles) return null;
     
@@ -709,42 +717,7 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  // 如果书签为空
-  if (bookmarks.length === 0 && !loading) {
-    return (
-      <div className="text-center py-12">
-        <div className="flex justify-center mb-4">
-          <FileText className="h-12 w-12 text-gray-300 dark:text-gray-600" />
-        </div>
-        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-          您还没有添加任何书签
-        </h3>
-        <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto mb-6">
-          添加书签来组织和保存您的网页收藏
-        </p>
-        <ImportButton />
-      </div>
-    );
-  }
-
-  // 如果过滤后没有结果
-  if (filteredBookmarks.length === 0 && searchQuery && !loading) {
-    return (
-      <div className="text-center py-12">
-        <div className="flex justify-center mb-4">
-          <FileText className="h-12 w-12 text-gray-300 dark:text-gray-600" />
-        </div>
-        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-          没有找到匹配的书签
-        </h3>
-        <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-          尝试其他搜索词或浏览所有书签
-        </p>
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     );
   }
@@ -768,39 +741,122 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
     }
 
     const currentPageBookmarks = getCurrentPageBookmarks();
-    
-    // 无论是列表视图还是网格视图，都使用网格布局和相同的卡片样式
+
     return (
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div className={`grid grid-cols-1 ${activeView === 'grid' ? 'md:grid-cols-3 lg:grid-cols-4' : ''} gap-4`}>
         {currentPageBookmarks.map(bookmark => {
           const cardClass = getBookmarkCardClass(bookmark);
           const hasGradient = cardClass !== '';
-          const bgClass = cardClass; // 总是使用渐变背景
           
+          if (activeView === 'list') {
+            // 列表视图 - 优化为左侧彩色背景
+            return (
+              <div 
+                key={bookmark.id}
+                className="rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-all duration-300 flex"
+              >
+                {/* 左侧彩色背景区域 */}
+                <div className={`${hasGradient ? cardClass : 'bg-gray-100 dark:bg-gray-700'} w-2 flex-shrink-0`}></div>
+                
+                <div className="flex items-start p-3 flex-grow">
+                  {/* 图标 */}
+                  <div className="flex-shrink-0 mr-3">
+                    {bookmark.favicon ? (
+                      <img 
+                        src={bookmark.favicon} 
+                        alt="" 
+                        className="w-8 h-8 rounded-md"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = '/globe.svg';
+                        }}
+                      />
+                    ) : (
+                      <div className={`w-8 h-8 ${hasGradient ? cardClass : 'bg-gray-100 dark:bg-gray-700'} rounded-md flex items-center justify-center`}>
+                        <ExternalLink className={`h-4 w-4 ${hasGradient ? 'text-white' : 'text-gray-500 dark:text-gray-400'}`} />
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* 内容 */}
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-base font-semibold leading-tight line-clamp-1 text-gray-900 dark:text-gray-100">
+                      {bookmark.title || '无标题'}
+                    </h2>
+                    
+                    {bookmark.description && (
+                      <p className="mt-0.5 text-xs line-clamp-1 text-gray-600 dark:text-gray-300">
+                        {bookmark.description}
+                      </p>
+                    )}
+                    
+                    {/* 渲染PDF文件 */}
+                    {renderPdfFile(bookmark)}
+                    
+                    {/* 渲染PDF上传区域 */}
+                    {renderPdfUploadArea(bookmark)}
+                    
+                    {/* 添加标签和收藏集展示 */}
+                    {renderTags(bookmark.id)}
+                    {renderCollections(bookmark.id)}
+                    
+                    <div className="flex items-center justify-between mt-1">
+                      <a 
+                        href={bookmark.url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                      >
+                        {new URL(bookmark.url).hostname}
+                      </a>
+                      
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {formatDate(bookmark.addedAt || bookmark.createdAt)}
+                        </span>
+                        
+                        <button
+                          onClick={() => setBookmarkToDelete(bookmark.id)}
+                          className="p-1 rounded-full text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                        >
+                          <Trash className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+          
+          // 网格视图 - 缩小卡片尺寸
           return (
             <div 
               key={bookmark.id}
               className="rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-all duration-200 transform hover:-translate-y-1"
             >
               <div className="flex flex-col h-full">
-                {/* 上半部分背景色区域 */}
-                <div className={`${bgClass} p-4 h-32`}>
+                {/* 上半部分背景色区域 - 减小高度为h-32 */}
+                <div className={`${hasGradient ? cardClass : 'bg-white dark:bg-gray-800'} p-4 h-32`}>
                   {/* 标题区域 */}
                   <div className="mb-1">
-                    <h2 className="text-base font-bold leading-tight line-clamp-2 text-white">
+                    <h2 className={`text-base font-bold leading-tight line-clamp-2 ${
+                      hasGradient ? 'text-white' : 'text-gray-900 dark:text-gray-100'
+                    }`}>
                       {bookmark.title || '无标题'}
                     </h2>
                   </div>
                   
                   {/* 描述区域 */}
                   {bookmark.description && (
-                    <p className="text-xs line-clamp-2 text-white/90">
+                    <p className={`text-xs line-clamp-2 ${
+                      hasGradient ? 'text-white/90' : 'text-gray-600 dark:text-gray-300'
+                    }`}>
                       {bookmark.description}
                     </p>
                   )}
                 </div>
                 
-                {/* 下半部分白色区域 */}
+                {/* 下半部分白色区域 - 减小内边距 */}
                 <div className="bg-white dark:bg-gray-800 p-3 flex-grow flex flex-col">
                   {/* 渲染PDF文件 */}
                   {renderPdfFile(bookmark)}
@@ -865,7 +921,7 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
 
   // 渲染分页控件
   const renderPagination = () => {
-    if (filteredBookmarks.length <= itemsPerPage) return null;
+    if (totalPages <= 1) return null;
     
     return (
       <div className="flex justify-center mt-6">
@@ -880,7 +936,7 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
             上一页
           </Button>
           
-          {Array.from({ length: Math.ceil(filteredBookmarks.length / itemsPerPage) }, (_, i) => i + 1).map(page => (
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
             <Button
               key={page}
               variant={page === currentPage ? "default" : "outline"}
@@ -896,7 +952,7 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
             variant="outline"
             size="sm"
             onClick={() => goToPage(currentPage + 1)}
-            disabled={currentPage === Math.ceil(filteredBookmarks.length / itemsPerPage)}
+            disabled={currentPage === totalPages}
             className="px-3"
           >
             下一页
@@ -954,22 +1010,20 @@ export default function BookmarkList({ searchQuery = '' }: BookmarkListProps) {
       </AlertDialog>
       
       {/* 上传进度对话框 */}
-      {isUploading && (
-        <AlertDialog open={isUploading} onOpenChange={(open) => !open && setIsUploading(false)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>上传PDF</AlertDialogTitle>
-              <AlertDialogDescription>
-                正在上传文件，请稍候...
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="my-4">
-              <Progress value={uploadProgress} className="h-2" />
-              <p className="text-sm text-gray-500 mt-2 text-center">{Math.round(uploadProgress)}%</p>
-            </div>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
+      <AlertDialog open={isUploading} onOpenChange={(open) => !open && setIsUploading(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>上传PDF</AlertDialogTitle>
+            <AlertDialogDescription>
+              正在上传文件，请稍候...
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="my-4">
+            <Progress value={uploadProgress} className="h-2" />
+            <p className="text-sm text-gray-500 mt-2 text-center">{Math.round(uploadProgress)}%</p>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 } 

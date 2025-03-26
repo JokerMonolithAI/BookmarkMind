@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { Bookmark } from '@/lib/bookmarkService';
-import { Tag, addTagToBookmark } from '@/lib/tagService';
+import { Bookmark } from '@/lib/supabaseBookmarkService';
+import { Tag, addTagToBookmark } from '@/lib/supabaseTagService';
 import { BookmarkForm } from './BookmarkForm';
 import {
   Dialog,
@@ -47,7 +47,7 @@ export function CreateBookmarkDialog({ onCreate, trigger }: CreateBookmarkDialog
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          userId: user.uid,
+          userId: user.id,
           title: bookmark.title,
           url: bookmark.url,
           description: bookmark.description || ''
@@ -64,7 +64,7 @@ export function CreateBookmarkDialog({ onCreate, trigger }: CreateBookmarkDialog
       // 添加标签到书签
       if (tags.length > 0) {
         for (const tag of tags) {
-          await addTagToBookmark(user.uid, newBookmarkId, tag.id);
+          await addTagToBookmark(user.id, newBookmarkId, tag.id);
         }
       }
       

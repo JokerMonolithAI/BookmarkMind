@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
-import { Collection, deleteCollection } from '@/lib/collectionService';
+import { Collection, deleteCollection } from '@/lib/supabaseCollectionService';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -67,7 +67,7 @@ export function CollectionCard({ collection, onDeleted }: CollectionCardProps) {
     
     try {
       setIsDeleting(true);
-      await deleteCollection(user.uid, collection.id);
+      await deleteCollection(user.id, collection.id);
       onDeleted();
     } catch (error) {
       console.error('Error deleting collection:', error);

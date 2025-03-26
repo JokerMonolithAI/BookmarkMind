@@ -23,7 +23,7 @@ interface TagDetailsClientProps {
 }
 
 export function TagDetailsClient({ tagId }: TagDetailsClientProps) {
-  const { user, loading: authLoading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [tag, setTag] = useState<Tag | null>(null);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
@@ -41,14 +41,14 @@ export function TagDetailsClient({ tagId }: TagDetailsClientProps) {
       setIsLoading(true);
       
       // 获取标签信息
-      const tagData = await getTag(user.uid, tagId);
+      const tagData = await getTag(user.id, tagId);
       setTag(tagData);
       
       // 获取与标签关联的书签ID列表
-      const bookmarkIds = await getTagBookmarks(user.uid, tagId);
+      const bookmarkIds = await getTagBookmarks(user.id, tagId);
       
       // 获取书签详细信息
-      const bookmarksData = await getUserBookmarksByIds(user.uid, bookmarkIds);
+      const bookmarksData = await getUserBookmarksByIds(user.id, bookmarkIds);
       
       setBookmarks(bookmarksData);
       setFilteredBookmarks(bookmarksData);

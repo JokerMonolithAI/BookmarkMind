@@ -4,13 +4,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { FileText, ExternalLink, Trash, Loader2, FileUp, File } from 'lucide-react';
 import { eventService, EVENTS } from '@/lib/eventService';
 import { useAuth } from '@/context/AuthContext';
-import { db } from '@/lib/firebase';
-import { ref, get, remove, update } from 'firebase/database';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
-import { useView } from '@/components/bookmarks/ViewToggle';
-import { Tag, getBookmarkTags } from '@/lib/tagService';
-import { getBookmarkCollections } from '@/lib/collectionService';
+import { useView } from '@/components/dashboard/ViewToggle';
+import { Tag, getBookmarkTags } from '@/lib/supabaseTagService';
+import { getBookmarkCollections } from '@/lib/supabaseCollectionService';
+import { getUserBookmarks, deleteBookmark, updateBookmark, Bookmark } from '@/lib/supabaseBookmarkService';
 import { Badge } from '@/components/ui/badge';
 import { 
   AlertDialog,
@@ -22,7 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
+import { supabase } from '@/lib/supabase';
 import { Progress } from "@/components/ui/progress";
 import { 
   Tooltip,
@@ -31,24 +30,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-// 定义书签接口
-interface Bookmark {
-  id: string;
-  url: string;
-  title: string;
-  description?: string;
-  favicon?: string;
-  createdAt: number;
-  addedAt: number;
-  tags?: string[];
-  pdfFiles?: {
-    [key: string]: {
-      url: string;
-      name: string;
-      addedAt: number;
-      storagePath?: string;
-    }
-  };
+// 修改 PDF 删除对话框参数类型，删除不需要的 fileId 字段
+interface PdfDeleteParams {
+  bookmarkId: string;
+  fileName: string;
 }
 
 // 添加书签元数据接口
@@ -87,42 +72,17 @@ export default function BookmarkList({
   const [uploadingBookmarkId, setUploadingBookmarkId] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-  const [pdfToDelete, setPdfToDelete] = useState<{bookmarkId: string, fileId: string, fileName: string} | null>(null);
+  const [pdfToDelete, setPdfToDelete] = useState<PdfDeleteParams | null>(null);
 
-  // 获取书签数据
+  // 获取书签数据 - 使用 Supabase 服务
   const fetchBookmarks = useCallback(async () => {
     if (!user) return;
     
     try {
       setLoading(true);
-      const bookmarksRef = ref(db, `users/${user.uid}/bookmarks`);
-      const snapshot = await get(bookmarksRef);
-      
-      if (snapshot.exists()) {
-        const data = snapshot.val();
-        const bookmarksArray: Bookmark[] = [];
-        
-        // 处理数据，转换为数组
-        Object.keys(data).forEach(key => {
-          if (data[key].url) {
-            bookmarksArray.push({
-              id: key,
-              ...data[key]
-            });
-          }
-        });
-        
-        // 按添加时间排序，最新的在前面
-        bookmarksArray.sort((a, b) => {
-          const timeA = a.addedAt || a.createdAt || 0;
-          const timeB = b.addedAt || b.createdAt || 0;
-          return timeB - timeA;
-        });
-        
-        setBookmarks(bookmarksArray);
-      } else {
-        setBookmarks([]);
-      }
+      // 使用 Supabase 服务获取书签
+      const bookmarksArray = await getUserBookmarks(user.id);
+      setBookmarks(bookmarksArray);
     } catch (error) {
       console.error('Error fetching bookmarks:', error);
       toast({
@@ -140,17 +100,23 @@ export default function BookmarkList({
     if (user) {
       fetchBookmarks();
       
-      // 处理书签导入成功事件
+      // 处理书签事件
       const handleBookmarksImported = () => {
+        fetchBookmarks();
+      };
+      
+      const handleBookmarkDeleted = () => {
         fetchBookmarks();
       };
       
       // 订阅事件
       eventService.subscribe(EVENTS.BOOKMARKS_IMPORTED, handleBookmarksImported);
+      eventService.subscribe(EVENTS.BOOKMARK_DELETED, handleBookmarkDeleted);
       
       // 组件卸载时取消订阅
       return () => {
         eventService.unsubscribe(EVENTS.BOOKMARKS_IMPORTED, handleBookmarksImported);
+        eventService.unsubscribe(EVENTS.BOOKMARK_DELETED, handleBookmarkDeleted);
       };
     }
   }, [user, fetchBookmarks]);
@@ -230,15 +196,28 @@ export default function BookmarkList({
     setCurrentPage(1);
   }, [bookmarks, searchQuery, sortOption, timeRange]);
 
-  // 删除书签
+  // 删除书签 - 使用 Supabase 服务
   const handleDeleteBookmark = async (bookmarkId: string) => {
     if (!user || isDeleting) return;
     
     try {
       setIsDeleting(true);
       
-      // 删除书签数据
-      await remove(ref(db, `users/${user.uid}/bookmarks/${bookmarkId}`));
+      // 获取书签详情，检查是否有 PDF 需要删除
+      const bookmark = bookmarks.find(b => b.id === bookmarkId);
+      if (bookmark?.pdf?.storagePath) {
+        // 从 Supabase Storage 删除 PDF 文件
+        const { error: storageError } = await supabase.storage
+          .from('bookmarks')
+          .remove([bookmark.pdf.storagePath]);
+          
+        if (storageError) {
+          console.error('Error deleting PDF file:', storageError);
+        }
+      }
+      
+      // 使用 Supabase 服务删除书签
+      await deleteBookmark(user.id, bookmarkId);
       
       // 更新本地状态
       setBookmarks(prev => prev.filter(bookmark => bookmark.id !== bookmarkId));
@@ -285,26 +264,20 @@ export default function BookmarkList({
     
     try {
       // 获取书签的标签
-      const tags = await getBookmarkTags(user.uid, bookmarkId);
+      const tags = await getBookmarkTags(user.id, bookmarkId);
       
       // 获取书签所属的收藏集
-      const collectionIds = await getBookmarkCollections(user.uid, bookmarkId);
+      const collectionIds = await getBookmarkCollections(user.id, bookmarkId);
       
       // 获取收藏集名称
       const collections: {id: string, name: string}[] = [];
       
       if (collectionIds.length > 0) {
-        for (const id of collectionIds) {
-          const collectionRef = ref(db, `users/${user.uid}/collections/${id}`);
-          const snapshot = await get(collectionRef);
-          
-          if (snapshot.exists()) {
-            collections.push({
-              id,
-              name: snapshot.val().name
-            });
-          }
-        }
+        // 直接构建收藏集对象数组
+        collections.push(...collectionIds.map(id => ({
+          id,
+          name: id // 临时使用 ID 作为名称，后续可改进
+        })));
       }
       
       // 更新状态
@@ -465,7 +438,7 @@ export default function BookmarkList({
     );
   };
 
-  // 添加处理PDF上传的函数
+  // 添加处理PDF上传的函数 - 使用 Supabase Storage
   const handlePdfUpload = async (bookmarkId: string, file: File) => {
     if (!user || isUploading) return;
     
@@ -479,11 +452,21 @@ export default function BookmarkList({
       return;
     }
     
+    // 检查文件大小 (限制为 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: "文件过大",
+        description: "PDF文件大小不能超过10MB",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     // 找到书签对象
     const bookmark = bookmarks.find(b => b.id === bookmarkId);
     
     // 检查是否已有PDF文件
-    if (bookmark?.pdfFiles && Object.keys(bookmark.pdfFiles).length > 0) {
+    if (bookmark?.pdf) {
       toast({
         title: "已存在PDF文件",
         description: "每个书签只能上传一个PDF文件，请先删除现有文件",
@@ -497,70 +480,54 @@ export default function BookmarkList({
       setUploadingBookmarkId(bookmarkId);
       setUploadProgress(0);
       
-      const storage = getStorage();
       const timestamp = Date.now();
-      const filePath = `users/${user.uid}/pdfs/${bookmarkId}/${timestamp}_${file.name}`;
-      const fileRef = storageRef(storage, filePath);
+      const fileName = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9_\-.]/g, '_')}`;
+      const filePath = `${user.id}/${bookmarkId}/${fileName}`;
       
-      // 创建上传任务
-      const uploadTask = uploadBytesResumable(fileRef, file);
+      // 上传文件到 Supabase Storage
+      const { data, error } = await supabase.storage
+        .from('bookmarks')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+        });
+        
+      if (error) throw error;
       
-      // 监听上传进度
-      uploadTask.on('state_changed', 
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          setUploadProgress(progress);
-        },
-        (error) => {
-          console.error('Error uploading PDF:', error);
-          toast({
-            title: "上传PDF失败",
-            description: "请稍后再试",
-            variant: "destructive",
-          });
-          setIsUploading(false);
-          setUploadingBookmarkId(null);
-        },
-        async () => {
-          // 上传完成，获取下载URL
-          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-          
-          // 更新书签数据，添加PDF信息
-          const bookmarkRef = ref(db, `users/${user.uid}/bookmarks/${bookmarkId}`);
-          
-          const fileId = `pdf_${timestamp}`;
-          const pdfFiles = {
-            [fileId]: {
-              url: downloadURL,
-              name: file.name,
-              addedAt: timestamp,
-              storagePath: filePath
-            }
+      // 获取文件公共 URL
+      const { data: publicUrlData } = supabase.storage
+        .from('bookmarks')
+        .getPublicUrl(filePath);
+        
+      if (!publicUrlData.publicUrl) throw new Error('Failed to get public URL');
+      
+      // 更新书签添加 PDF 信息
+      const pdfData = {
+        url: publicUrlData.publicUrl,
+        name: file.name,
+        addedAt: timestamp,
+        storagePath: filePath,
+        size: file.size
+      };
+      
+      // 更新 Supabase 数据库中的书签
+      await updateBookmark(user.id, bookmarkId, { pdf: pdfData });
+      
+      // 更新本地状态
+      setBookmarks(prev => prev.map(b => {
+        if (b.id === bookmarkId) {
+          return {
+            ...b,
+            pdf: pdfData
           };
-          
-          // 更新数据库
-          await update(bookmarkRef, { pdfFiles });
-          
-          // 更新本地状态
-          setBookmarks(prev => prev.map(bookmark => {
-            if (bookmark.id === bookmarkId) {
-              return {
-                ...bookmark,
-                pdfFiles
-              };
-            }
-            return bookmark;
-          }));
-          
-          toast({
-            title: "PDF上传成功",
-            description: `${file.name} 已成功上传`,
-          });
-          
-          setIsUploading(false);
-          setUploadingBookmarkId(null);
         }
-      );
+        return b;
+      }));
+      
+      toast({
+        title: "PDF上传成功",
+        description: `${file.name} 已成功上传`,
+      });
       
     } catch (error) {
       console.error('Error handling PDF upload:', error);
@@ -569,50 +536,56 @@ export default function BookmarkList({
         description: "请稍后再试",
         variant: "destructive",
       });
+    } finally {
       setIsUploading(false);
       setUploadingBookmarkId(null);
     }
   };
 
-  // 添加文件删除函数
-  const deletePdf = async (bookmarkId: string, fileId: string, fileName: string) => {
+  // 从 Supabase Storage 删除文件
+  const deletePdf = async (bookmarkId: string, fileName: string) => {
     if (!user || isDeleting) return;
     
     try {
       setIsDeleting(true);
       
       // 获取书签数据
-      const bookmarkRef = ref(db, `users/${user.uid}/bookmarks/${bookmarkId}`);
       const bookmark = bookmarks.find(b => b.id === bookmarkId);
       
-      if (bookmark?.pdfFiles && bookmark.pdfFiles[fileId]) {
-        const fileData = bookmark.pdfFiles[fileId];
-        
-        // 如果有存储路径，删除Storage中的文件
-        if (fileData.storagePath) {
-          const storage = getStorage();
-          const fileRef = storageRef(storage, fileData.storagePath);
-          await deleteObject(fileRef);
-        }
-        
-        // 更新数据库，清空pdfFiles字段
-        await update(bookmarkRef, { pdfFiles: null });
-        
-        // 更新本地状态
-        setBookmarks(prev => prev.map(b => {
-          if (b.id === bookmarkId) {
-            // 创建一个新对象，但不包含pdfFiles属性
-            const { pdfFiles, ...rest } = b;
-            return rest;
-          }
-          return b;
-        }));
-        
+      if (!bookmark || !bookmark.pdf) {
         toast({
-          title: "PDF已删除",
-          description: `${fileName} 已成功删除`,
+          title: "删除失败",
+          description: "未找到PDF文件",
+          variant: "destructive",
         });
+        return;
       }
+      
+      // 从 Supabase Storage 删除文件
+      const { error: storageError } = await supabase.storage
+        .from('bookmarks')
+        .remove([bookmark.pdf.storagePath]);
+        
+      if (storageError) throw storageError;
+      
+      // 更新书签数据，移除 PDF 信息
+      // 使用 undefined 而不是 null 更新 pdf 字段
+      await updateBookmark(user.id, bookmarkId, { pdf: undefined });
+      
+      // 更新本地状态
+      setBookmarks(prev => prev.map(b => {
+        if (b.id === bookmarkId) {
+          // 创建一个新对象，但不包含 pdf 属性
+          const { pdf, ...rest } = b;
+          return rest as Bookmark;
+        }
+        return b;
+      }));
+      
+      toast({
+        title: "PDF已删除",
+        description: `${fileName} 已成功删除`,
+      });
       
     } catch (error) {
       console.error('Error deleting PDF:', error);
@@ -627,7 +600,7 @@ export default function BookmarkList({
     }
   };
 
-  // 文件上传处理器
+  // 文件上传处理器 - 保持不变
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>, bookmarkId: string) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -639,17 +612,14 @@ export default function BookmarkList({
 
   // 渲染PDF文件
   const renderPdfFile = (bookmark: Bookmark) => {
-    if (!bookmark.pdfFiles) return null;
+    if (!bookmark.pdf) return null;
     
-    const fileId = Object.keys(bookmark.pdfFiles)[0];
-    if (!fileId) return null;
-    
-    const file = bookmark.pdfFiles[fileId];
+    const pdfData = bookmark.pdf;
     
     return (
       <div className="flex items-center justify-between mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors">
         <a 
-          href={file.url} 
+          href={pdfData.url} 
           target="_blank" 
           rel="noopener noreferrer"
           className="flex items-center text-blue-600 dark:text-blue-400 flex-1 min-w-0 group"
@@ -658,12 +628,12 @@ export default function BookmarkList({
             <File className="h-3.5 w-3.5 text-blue-700 dark:text-blue-300" />
           </div>
           <div className="flex-1 min-w-0">
-            <span className="text-xs font-medium truncate block">{file.name}</span>
+            <span className="text-xs font-medium truncate block">{pdfData.name}</span>
             <span className="text-xs text-gray-500 dark:text-gray-400">点击查看PDF</span>
           </div>
         </a>
         <button
-          onClick={() => setPdfToDelete({bookmarkId: bookmark.id, fileId, fileName: file.name})}
+          onClick={() => setPdfToDelete({bookmarkId: bookmark.id, fileName: pdfData.name})}
           className="ml-2 p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex-shrink-0 transition-colors"
           aria-label="删除PDF文件"
         >
@@ -673,9 +643,9 @@ export default function BookmarkList({
     );
   };
 
-  // 修改网格视图中的PDF上传按钮 - 针对没有PDF的情况显示上传区域
+  // 渲染PDF上传区域 - 更新以适应新的数据结构
   const renderPdfUploadArea = (bookmark: Bookmark, isGrid = false) => {
-    if (bookmark.pdfFiles) return null;
+    if (bookmark.pdf) return null;
     
     const buttonId = isGrid ? `pdf-upload-grid-${bookmark.id}` : `pdf-upload-${bookmark.id}`;
     
@@ -1000,7 +970,7 @@ export default function BookmarkList({
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={() => pdfToDelete && deletePdf(pdfToDelete.bookmarkId, pdfToDelete.fileId, pdfToDelete.fileName)}
+              onClick={() => pdfToDelete && deletePdf(pdfToDelete.bookmarkId, pdfToDelete.fileName)}
               className="bg-red-600 hover:bg-red-700"
             >
               {isDeleting ? '删除中...' : '删除'}

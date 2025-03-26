@@ -21,7 +21,7 @@ import {
   getCollection, 
   getCollectionBookmarks,
   deleteCollection
-} from '@/lib/collectionService';
+} from '@/lib/supabaseCollectionService';
 import { EditCollectionDialog } from '@/components/collections/EditCollectionDialog';
 import { 
   AlertDialog,
@@ -33,7 +33,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Bookmark as BookmarkType, getUserBookmarksByIds } from '@/lib/bookmarkService';
+import { Bookmark as BookmarkType, getUserBookmarksByIds } from '@/lib/supabaseBookmarkService';
 import { BookmarkCard } from '@/components/bookmarks/BookmarkCard';
 import { AddBookmarkDialog } from '@/components/collections/AddBookmarkDialog';
 import { eventService, EVENTS } from '@/lib/eventService';
@@ -79,15 +79,15 @@ function CollectionContent() {
       setLoading(true);
       
       // 获取收藏集信息
-      const collectionData = await getCollection(user.uid, collectionId);
+      const collectionData = await getCollection(user.id, collectionId);
       setCollection(collectionData);
       
       // 获取收藏集中的书签ID
-      const bookmarkIds = await getCollectionBookmarks(user.uid, collectionId);
+      const bookmarkIds = await getCollectionBookmarks(user.id, collectionId);
       
       if (bookmarkIds.length > 0) {
         // 根据书签ID获取书签详情
-        const bookmarksData = await getUserBookmarksByIds(user.uid, bookmarkIds);
+        const bookmarksData = await getUserBookmarksByIds(user.id, bookmarkIds);
         setBookmarks(bookmarksData);
       } else {
         setBookmarks([]);
@@ -123,7 +123,7 @@ function CollectionContent() {
     
     try {
       setIsDeleting(true);
-      await deleteCollection(user.uid, collection.id);
+      await deleteCollection(user.id, collection.id);
       router.push('/collections');
     } catch (error) {
       console.error('Error deleting collection:', error);
@@ -348,16 +348,16 @@ function CollectionContent() {
 
 // 主 Collection 详情组件
 export default function CollectionDetail() {
-  const { user, loading } = useAuth();
+  const { user, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!isLoading && !user) {
       router.push('/login');
     }
-  }, [user, loading, router]);
+  }, [user, isLoading, router]);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900">
         <div className="text-center">

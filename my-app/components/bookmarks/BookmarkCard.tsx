@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
-import { Bookmark as BookmarkType, deleteBookmark } from '@/lib/bookmarkService';
+import { Bookmark as BookmarkType, deleteBookmark } from '@/lib/supabaseBookmarkService';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -41,7 +41,7 @@ import {
 import { extractDomain, truncateText } from '@/lib/utils';
 import { toast } from '@/components/ui/use-toast';
 import { eventService, EVENTS } from '@/lib/eventService';
-import { Tag, getBookmarkTags } from '@/lib/tagService';
+import { Tag, getBookmarkTags } from '@/lib/supabaseTagService';
 import { EditBookmarkDialog } from './EditBookmarkDialog';
 
 interface BookmarkCardProps {
@@ -87,7 +87,7 @@ export function BookmarkCard({ bookmark, viewMode = 'grid', onDeleted }: Bookmar
     
     try {
       setIsDeleting(true);
-      await deleteBookmark(user.uid, bookmark.id);
+      await deleteBookmark(user.id, bookmark.id);
       
       // 显示成功提示
       toast({
@@ -144,7 +144,7 @@ export function BookmarkCard({ bookmark, viewMode = 'grid', onDeleted }: Bookmar
       
       try {
         setIsLoadingTags(true);
-        const bookmarkTags = await getBookmarkTags(user.uid, bookmark.id);
+        const bookmarkTags = await getBookmarkTags(user.id, bookmark.id);
         setTags(bookmarkTags);
       } catch (error) {
         console.error('Error fetching bookmark tags:', error);

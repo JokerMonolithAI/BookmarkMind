@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { Tag, getUserTags, createTag } from '@/lib/tagService';
+import { Tag, getUserTags, createTag } from '@/lib/supabaseTagService';
 import { Button } from '@/components/ui/button';
 import { 
   Command, 
@@ -41,7 +41,7 @@ export function TagSelector({ selectedTags, onTagsChange }: TagSelectorProps) {
     
     try {
       setIsLoading(true);
-      const userTags = await getUserTags(user.uid);
+      const userTags = await getUserTags(user.id);
       setTags(userTags);
     } catch (error) {
       console.error('Error fetching tags:', error);
@@ -60,7 +60,7 @@ export function TagSelector({ selectedTags, onTagsChange }: TagSelectorProps) {
 
     try {
       setIsLoading(true);
-      const newTag = await createTag(user.uid, { 
+      const newTag = await createTag(user.id, { 
         name: newTagName,
         color: 'blue'  // 添加默认颜色
       });

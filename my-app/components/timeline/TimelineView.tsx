@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { getUserBookmarks, Bookmark } from '@/lib/bookmarkService';
+import { getUserBookmarks, Bookmark } from '@/lib/supabaseBookmarkService';
 import { Loader2, Clock, CalendarDays, Calendar, History } from 'lucide-react';
 import { formatDistanceToNow, isToday, isYesterday, startOfWeek, startOfMonth, format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -49,7 +49,7 @@ export default function TimelineView({ searchQuery = '' }: TimelineViewProps) {
       
       try {
         setLoading(true);
-        const fetchedBookmarks = await getUserBookmarks(user.uid);
+        const fetchedBookmarks = await getUserBookmarks(user.id);
         // 按创建时间降序排序（最新的在前）
         const sortedBookmarks = fetchedBookmarks.sort((a, b) => b.createdAt - a.createdAt);
         setBookmarks(sortedBookmarks);

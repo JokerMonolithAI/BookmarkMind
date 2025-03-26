@@ -5,12 +5,13 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { Suspense } from 'react'
 import { BookmarkStats } from '@/components/dashboard/BookmarkStats'
-import BookmarkList from '@/components/dashboard/BookmarkList'
+import BookmarkList from '@/components/bookmarks/BookmarkList'
 import CollectionsList from '@/components/dashboard/CollectionsList'
 import DashboardTagsList from '@/components/dashboard/DashboardTagsList'
 import TimelineView from '@/components/timeline/TimelineView'
 import ImportButton from '@/components/dashboard/ImportButton'
-import { ViewProvider, useView } from '@/components/dashboard/ViewToggle'
+import { ViewProvider } from '@/components/dashboard/ViewToggle'
+import { useView } from '@/components/dashboard/ViewToggle'
 import { SearchBar } from '@/components/dashboard/SearchBar'
 import { Sidebar } from '@/components/dashboard/Sidebar'
 import { CategoryTabs } from '@/components/dashboard/CategoryTabs'
@@ -114,16 +115,16 @@ function DashboardContent() {
 
 // 主 Dashboard 组件
 export default function Dashboard() {
-  const { user, loading } = useAuth();
+  const { user, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!isLoading && !user) {
       router.push('/login');
     }
-  }, [user, loading, router]);
+  }, [user, isLoading, router]);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col bg-white dark:bg-gray-900">
         <div className="flex-grow flex items-center justify-center">

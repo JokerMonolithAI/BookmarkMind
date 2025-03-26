@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { Collection, getUserCollections } from '@/lib/collectionService';
+import { Collection, getUserCollections } from '@/lib/supabaseCollectionService';
 import { Loader2, Bookmark, FolderHeart } from 'lucide-react';
 import { eventService, EVENTS } from '@/lib/eventService';
 import { useRouter } from 'next/navigation';
@@ -21,7 +21,7 @@ export default function CollectionsList() {
     
     try {
       setLoading(true);
-      const collectionsData = await getUserCollections(user.uid);
+      const collectionsData = await getUserCollections(user.id);
       setCollections(collectionsData);
     } catch (error) {
       console.error('Error fetching collections:', error);

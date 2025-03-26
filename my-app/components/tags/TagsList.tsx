@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Tag, deleteTag } from '@/lib/tagService';
+import { Tag, deleteTag } from '@/lib/supabaseTagService';
 import { TagCard } from './TagCard';
 import { CreateTagDialog } from './CreateTagDialog';
 import { useAuth } from '@/context/AuthContext';
@@ -92,7 +92,7 @@ export function TagsList({
     if (!user) return;
     
     try {
-      await deleteTag(user.uid, tagId);
+      await deleteTag(user.id, tagId);
       toast({
         title: '标签已删除',
         description: '标签已成功删除',

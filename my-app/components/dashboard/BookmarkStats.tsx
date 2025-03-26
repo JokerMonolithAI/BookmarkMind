@@ -2,12 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { db } from '@/lib/firebase';
-import { ref, get } from 'firebase/database';
 import { Card } from '@/components/ui/card';
 import { Loader2, TrendingUp, PieChart, Network } from 'lucide-react';
 import { eventService, EVENTS } from '@/lib/eventService';
 import Link from 'next/link';
+import { getUserBookmarks } from '@/lib/supabaseBookmarkService';
 
 export function BookmarkStats() {
   const { user } = useAuth();
@@ -21,96 +20,38 @@ export function BookmarkStats() {
 
     try {
       setLoading(true);
-      const bookmarksRef = ref(db, `users/${user.uid}/bookmarks`);
-      const snapshot = await get(bookmarksRef);
-
-      if (snapshot.exists()) {
-        const data = snapshot.val();
+      
+      // 使用 Supabase 获取书签数据
+      const bookmarks = await getUserBookmarks(user.id);
+      
+      // 计算总数
+      setTotalBookmarks(bookmarks.length);
+      
+      // 计算本周新增
+      const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const today = new Date();
+      const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7);
+      
+      // 使用方法2：使用Date对象比较
+      const recentBookmarks = bookmarks.filter(bookmark => {
+        // 优先使用addedAt而不是createdAt
+        const addedTime = bookmark.addedAt || bookmark.createdAt || 0;
         
-        // 处理数据，计算总数和本周新增
-        let bookmarksArray: any[] = [];
+        // 检查时间戳是否为字符串，如果是则转换为数字
+        const timeValue = typeof addedTime === 'string' ? parseInt(addedTime, 10) : addedTime;
         
-        // 检查数据结构，处理可能的嵌套情况
-        if (typeof data === 'object') {
-          // 直接遍历顶层对象
-          Object.keys(data).forEach(key => {
-            const item = data[key];
-            
-            // 检查是否是有效的书签对象
-            if (item && typeof item === 'object' && item.url) {
-              bookmarksArray.push({
-                id: key,
-                ...item
-              });
-            } else if (item && typeof item === 'object') {
-              // 可能是嵌套的情况，再遍历一层
-              Object.keys(item).forEach(subKey => {
-                const subItem = item[subKey];
-                if (subItem && typeof subItem === 'object' && subItem.url) {
-                  bookmarksArray.push({
-                    id: `${key}_${subKey}`,
-                    ...subItem
-                  });
-                }
-              });
-            }
-          });
-        }
+        // 检查时间戳是否为秒级时间戳（10位数），如果是则转换为毫秒级（13位数）
+        const normalizedTime = timeValue && timeValue.toString().length === 10 
+          ? timeValue * 1000 
+          : timeValue;
         
-        // 计算总数
-        setTotalBookmarks(bookmarksArray.length);
-        
-        // 计算本周新增 - 更详细的调试
-        const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;        
-        
-        // 尝试一种更直接的方法 - 使用当前日期作为参考点
-        const today = new Date();
-        const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7);
-                
-        // 使用两种方法计算
-        const recentBookmarks1 = bookmarksArray.filter(bookmark => {
-          // 修改：优先使用addedAt而不是createdAt
-          const addedTime = bookmark.addedAt || bookmark.createdAt || 0;
-          
-          // 检查时间戳是否为字符串，如果是则转换为数字
-          const timeValue = typeof addedTime === 'string' ? parseInt(addedTime, 10) : addedTime;
-          
-          // 检查时间戳是否为秒级时间戳（10位数），如果是则转换为毫秒级（13位数）
-          const normalizedTime = timeValue && timeValue.toString().length === 10 
-            ? timeValue * 1000 
-            : timeValue;
-          
-          const isRecent = normalizedTime > oneWeekAgo;
-                    
-          return normalizedTime > oneWeekAgo;
-        });
-        
-        // 方法2：使用Date对象比较
-        const recentBookmarks2 = bookmarksArray.filter(bookmark => {
-          // 修改：优先使用addedAt而不是createdAt
-          const addedTime = bookmark.addedAt || bookmark.createdAt || 0;
-          
-          // 检查时间戳是否为字符串，如果是则转换为数字
-          const timeValue = typeof addedTime === 'string' ? parseInt(addedTime, 10) : addedTime;
-          
-          // 检查时间戳是否为秒级时间戳（10位数），如果是则转换为毫秒级（13位数）
-          const normalizedTime = timeValue && timeValue.toString().length === 10 
-            ? timeValue * 1000 
-            : timeValue;
-          
-          // 创建日期对象
-          const bookmarkDate = new Date(normalizedTime);
-          const isRecent = bookmarkDate > weekStart;
-                    
-          return isRecent;
-        });
-                
-        // 使用方法2的结果
-        setNewThisWeek(recentBookmarks2.length);
-      } else {
-        setTotalBookmarks(0);
-        setNewThisWeek(0);
-      }
+        // 创建日期对象
+        const bookmarkDate = new Date(normalizedTime);
+        return bookmarkDate > weekStart;
+      });
+      
+      // 更新本周新增数量
+      setNewThisWeek(recentBookmarks.length);
     } catch (error) {
       console.error('Error fetching bookmark stats:', error);
     } finally {

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2 } from 'lucide-react';
-import { Collection, updateCollection } from '@/lib/collectionService';
+import { Collection, updateCollection } from '@/lib/supabaseCollectionService';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -70,7 +70,7 @@ export function EditCollectionDialog({
       setIsSubmitting(true);
       setError('');
       
-      await updateCollection(user.uid, collection.id, {
+      await updateCollection(user.id, collection.id, {
         name: name.trim(),
         description: description.trim() || undefined,
       });

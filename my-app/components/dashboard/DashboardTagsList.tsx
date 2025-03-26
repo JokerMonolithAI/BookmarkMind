@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { getUserTags, Tag } from '@/lib/tagService';
+import { getUserTags, Tag } from '@/lib/supabaseTagService';
 import { Loader2, Tag as TagIcon, Bookmark, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -22,7 +22,7 @@ export default function DashboardTagsList() {
     
     try {
       setLoading(true);
-      const tagsData = await getUserTags(user.uid);
+      const tagsData = await getUserTags(user.id);
       setTags(tagsData);
     } catch (error) {
       console.error('Error fetching tags:', error);

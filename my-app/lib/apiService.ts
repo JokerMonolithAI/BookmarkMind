@@ -1,4 +1,4 @@
-import { auth } from './firebase';
+import { supabase } from './supabase';
 
 // 定义分析选项接口
 export interface AnalysisOptions {
@@ -79,15 +79,15 @@ class ApiService {
   }
   
   private async getAuthHeaders(): Promise<Record<string, string>> {
-    const user = auth.currentUser;
-    if (!user) {
+    const session = await supabase.auth.getSession();
+    if (!session.data.session) {
       throw new Error("用户未登录");
     }
     
-    const idToken = await user.getIdToken();
+    const accessToken = session.data.session.access_token;
     return {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${idToken}`
+      "Authorization": `Bearer ${accessToken}`
     };
   }
   
@@ -113,7 +113,7 @@ class ApiService {
   ): Promise<BookmarkAnalysisResponse> {
     try {
       const headers = await this.getAuthHeaders();
-      const user = auth.currentUser;
+      const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
         throw new Error("用户未登录");
@@ -125,7 +125,7 @@ class ApiService {
         body: JSON.stringify({
           url,
           bookmarkId,
-          userId: user.uid,
+          userId: user.id,
           options: {
             extractContent: true,
             generateSummary: true,
@@ -150,7 +150,7 @@ class ApiService {
   ): Promise<BatchAnalysisResponse> {
     try {
       const headers = await this.getAuthHeaders();
-      const user = auth.currentUser;
+      const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
         throw new Error("用户未登录");
@@ -161,7 +161,7 @@ class ApiService {
         headers,
         body: JSON.stringify({
           bookmarks,
-          userId: user.uid,
+          userId: user.id,
           options: {
             extractContent: true,
             generateSummary: true,
@@ -186,7 +186,7 @@ class ApiService {
   ): Promise<MindMapAnalysisResponse> {
     try {
       const headers = await this.getAuthHeaders();
-      const user = auth.currentUser;
+      const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
         throw new Error("用户未登录");
@@ -196,7 +196,7 @@ class ApiService {
         method: "POST",
         headers,
         body: JSON.stringify({
-          userId: user.uid,
+          userId: user.id,
           category: category,
           id: bookmarkId || null
         })
@@ -245,7 +245,7 @@ class ApiService {
   async getBookmarksMarkdown(category: string): Promise<MindMapAnalysisResponse> {
     try {
       const headers = await this.getAuthHeaders();
-      const user = auth.currentUser;
+      const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
         throw new Error("用户未登录");
@@ -255,7 +255,7 @@ class ApiService {
         method: "POST",
         headers,
         body: JSON.stringify({
-          userId: user.uid,
+          userId: user.id,
           category: category
         })
       });

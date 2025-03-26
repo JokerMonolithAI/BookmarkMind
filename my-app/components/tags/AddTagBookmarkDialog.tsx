@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2, Search, Check } from 'lucide-react';
-import { addTagToBookmarks } from '@/lib/tagService';
-import { getUserBookmarks, Bookmark } from '@/lib/bookmarkService';
+import { addTagToBookmarks } from '@/lib/supabaseTagService';
+import { getUserBookmarks, Bookmark } from '@/lib/supabaseBookmarkService';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -56,7 +56,7 @@ export function AddTagBookmarkDialog({
         setSelectedBookmarkIds([]);
         
         // 获取用户的所有书签
-        const userBookmarks = await getUserBookmarks(user.uid);
+        const userBookmarks = await getUserBookmarks(user.id);
         setBookmarks(userBookmarks);
         setFilteredBookmarks(userBookmarks);
       } catch (error) {
@@ -153,7 +153,7 @@ export function AddTagBookmarkDialog({
       setError('');
       
       // 批量添加所有选中的书签到标签
-      await addTagToBookmarks(user.uid, tagId, bookmarksToAdd);
+      await addTagToBookmarks(user.id, tagId, bookmarksToAdd);
       
       toast({
         title: "添加成功",

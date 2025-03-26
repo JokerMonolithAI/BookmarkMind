@@ -2,8 +2,13 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
-import { getUserBookmarks, saveUserBookmarks } from '../lib/bookmarkService';
-import { Bookmark, BookmarkFolder, UserBookmarkData } from '../types/bookmark';
+import { 
+  getUserBookmarks,
+  getUserFolders,
+  saveUserBookmarks,
+  Bookmark
+} from '../lib/supabaseBookmarkService';
+import { BookmarkFolder } from '../types/bookmark';
 
 interface BookmarkContextType {
   bookmarks: Record<string, Bookmark>;
@@ -25,29 +30,47 @@ export function BookmarkProvider({ children }: { children: ReactNode }) {
 
   // 加载用户书签数据
   const loadUserBookmarks = async () => {
+    setLoading(true);
+    setError(null);
+    
+    // 如果用户未登录，重置书签状态并返回
     if (!user) {
       setBookmarks({});
       setFolders({});
       setLoading(false);
       return;
     }
-
+    
     try {
-      setLoading(true);
-      setError(null);
-      const userData = await getUserBookmarks(user.uid);
-      
-      if (userData) {
-        setBookmarks(userData.bookmarks || {});
-        setFolders(userData.folders || {});
-      } else {
-        // 用户没有书签数据
+      // 确保用户ID有效
+      if (!user.id) {
+        console.warn('用户已登录但ID无效');
         setBookmarks({});
         setFolders({});
+        setLoading(false);
+        return;
       }
+      
+      // 并行获取书签和文件夹
+      const [bookmarksList, foldersData] = await Promise.all([
+        getUserBookmarks(user.id),
+        getUserFolders(user.id)
+      ]);
+      
+      // 将书签列表转换为对象格式
+      const bookmarksObj: Record<string, Bookmark> = {};
+      bookmarksList.forEach(bookmark => {
+        bookmarksObj[bookmark.id] = bookmark;
+      });
+      
+      setBookmarks(bookmarksObj);
+      setFolders(foldersData);
     } catch (err) {
       console.error('Failed to load bookmarks:', err);
       setError('加载书签失败，请稍后再试');
+      // 重置状态
+      setBookmarks({});
+      setFolders({});
     } finally {
       setLoading(false);
     }
@@ -62,10 +85,15 @@ export function BookmarkProvider({ children }: { children: ReactNode }) {
       setError('用户未登录，无法保存书签');
       return;
     }
+    
+    if (!user.id) {
+      setError('用户ID无效，无法保存书签');
+      return;
+    }
 
     try {
       setLoading(true);
-      await saveUserBookmarks(user.uid, newBookmarks, newFolders);
+      await saveUserBookmarks(user.id, newBookmarks, newFolders);
       setBookmarks(newBookmarks);
       setFolders(newFolders);
       setError(null);

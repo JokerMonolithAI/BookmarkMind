@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { createTag, TAG_COLORS } from '@/lib/tagService';
+import { createTag, TAG_COLORS } from '@/lib/supabaseTagService';
 import {
   Dialog,
   DialogContent,
@@ -66,7 +66,7 @@ export function CreateTagDialog({ onCreated }: CreateTagDialogProps) {
     try {
       setIsLoading(true);
       
-      await createTag(user.uid, {
+      await createTag(user.id, {
         name,
         color,
         bgColor: customColor

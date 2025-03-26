@@ -10,7 +10,7 @@ import { ThemeToggle } from '@/components/ui/theme-toggle';
 import ImportButton from '@/components/dashboard/ImportButton';
 import { Loader2, FolderHeart, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Collection, getUserCollections } from '@/lib/collectionService';
+import { Collection, getUserCollections } from '@/lib/supabaseCollectionService';
 import { CollectionCard } from '@/components/collections/CollectionCard';
 import { CreateCollectionDialog } from '@/components/collections/CreateCollectionDialog';
 import { Footer } from '@/components/ui/footer';
@@ -28,7 +28,7 @@ function CollectionsContent() {
     
     try {
       setLoading(true);
-      const collectionsData = await getUserCollections(user.uid);
+      const collectionsData = await getUserCollections(user.id);
       setCollections(collectionsData);
     } catch (error) {
       console.error('Error fetching collections:', error);
@@ -158,16 +158,28 @@ function CollectionsContent() {
 
 // 主 Collections 组件
 export default function Collections() {
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
+  const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
+    // 检查身份验证状态
+    if (user) {
+      setAuthLoading(false);
+    } else {
+      // 假设如果没有用户，我们延迟一个短时间来检查是否正在加载
+      const timer = setTimeout(() => {
+        setAuthLoading(false);
+        if (!user) {
+          router.push('/login');
+        }
+      }, 500);
+      
+      return () => clearTimeout(timer);
     }
-  }, [user, loading, router]);
+  }, [user, router]);
 
-  if (loading) {
+  if (authLoading) {
     return (
       <div className="min-h-screen flex flex-col bg-white dark:bg-gray-900">
         <div className="flex-grow flex items-center justify-center">

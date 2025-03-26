@@ -1,11 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -21,10 +20,17 @@ export default function LoginPage() {
     setError('');
     
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) throw error;
+      
       router.push('/dashboard');
-    } catch (error) {
+    } catch (error: any) {
       setError('登录失败，请检查您的邮箱和密码');
+      console.error('登录错误:', error.message);
     } finally {
       setIsLoading(false);
     }
@@ -35,13 +41,20 @@ export default function LoginPage() {
     setError('');
     
     try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-      router.push('/dashboard');
-    } catch (error) {
-      setError('Google 登录失败，请重试');
-    } finally {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/dashboard`,
+        },
+      });
+      
+      if (error) throw error;
+      
+      // 注意：对于 OAuth，Supabase 会自动重定向，所以这里不需要手动导航
+    } catch (error: any) {
       setIsGoogleLoading(false);
+      setError('Google 登录失败，请重试');
+      console.error('Google 登录错误:', error.message);
     }
   };
 

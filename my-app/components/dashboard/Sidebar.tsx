@@ -7,20 +7,21 @@ import { usePathname } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import { db } from '@/lib/firebase'
 import { ref, get } from 'firebase/database'
-import { getUserCollections, Collection } from '@/lib/collectionService'
-import { getUserTags, Tag } from '@/lib/tagService'
+import { getUserCollections, Collection } from '@/lib/supabaseCollectionService'
+import { getUserTags, Tag } from '@/lib/supabaseTagService'
 import { 
   Home, 
   Bookmark, 
   FolderHeart, 
-  Tag as LucideTag, 
+  Tag as TagIcon, 
   Clock, 
   Brain, 
   BarChart, 
   ChevronDown, 
   ChevronRight,
   FolderOpen,
-  Hash
+  Hash,
+  FolderClosed
 } from 'lucide-react'
 
 export function Sidebar() {
@@ -40,9 +41,8 @@ export function Sidebar() {
     const fetchCollections = async () => {
       try {
         setIsLoadingCollections(true)
-        // 使用collectionService中的getUserCollections函数获取真实数据
-        const userCollections = await getUserCollections(user.uid)
-        setCollections(userCollections)
+        const collections = await getUserCollections(user.id)
+        setCollections(collections)
       } catch (error) {
         console.error('Error fetching collections:', error)
       } finally {
@@ -60,9 +60,8 @@ export function Sidebar() {
     const fetchTags = async () => {
       try {
         setIsLoadingTags(true)
-        // 使用tagService中的getUserTags函数获取真实数据
-        const userTags = await getUserTags(user.uid)
-        setTags(userTags)
+        const tags = await getUserTags(user.id)
+        setTags(tags)
       } catch (error) {
         console.error('Error fetching tags:', error)
       } finally {
@@ -112,7 +111,7 @@ export function Sidebar() {
         <NavItem href="/mindmap" icon={<Brain className="h-5 w-5" />}>知识图谱</NavItem>
         <NavItem href="/bookmarks" icon={<Bookmark className="h-5 w-5" />}>所有书签</NavItem>
         <NavItem href="/collections" icon={<FolderHeart className="h-5 w-5" />}>收藏集</NavItem>
-        <NavItem href="/tags" icon={<LucideTag className="h-5 w-5" />}>标签</NavItem>
+        <NavItem href="/tags" icon={<TagIcon className="h-5 w-5" />}>标签</NavItem>
         <NavItem href="/recent" icon={<Clock className="h-5 w-5" />}>时间线</NavItem>       
         
         {/* 收藏集 */}

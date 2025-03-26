@@ -1,12 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase';
-import { ref, set } from 'firebase/database';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 export default function SignupPage() {
   const [email, setEmail] = useState('');
@@ -23,26 +21,31 @@ export default function SignupPage() {
     setError('');
     
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-      // Save additional user data to Firebase Realtime Database
-      await set(ref(db, `users/${user.uid}`), {
-        name,
+      // 使用 Supabase 注册新用户
+      const { data, error } = await supabase.auth.signUp({
         email,
-        createdAt: new Date().toISOString(),
+        password,
+        options: {
+          data: {
+            name,
+            createdAt: new Date().toISOString(),
+          }
+        }
       });
-
+      
+      if (error) throw error;
+      
       router.push('/dashboard');
     } catch (error: any) {
       // 提供更具体的错误信息
-      if (error.code === 'auth/email-already-in-use') {
+      if (error.message.includes('already registered')) {
         setError('该邮箱已被注册，请使用其他邮箱或直接登录');
-      } else if (error.code === 'auth/weak-password') {
+      } else if (error.message.includes('password')) {
         setError('密码强度不足，请使用至少6位字符的密码');
       } else {
         setError('注册失败，请重试');
       }
+      console.error('注册错误:', error.message);
     } finally {
       setIsLoading(false);
     }
@@ -53,25 +56,20 @@ export default function SignupPage() {
     setError('');
     
     try {
-      const provider = new GoogleAuthProvider();
-      const userCredential = await signInWithPopup(auth, provider);
-      const user = userCredential.user;
-      
-      // 检查用户是否为首次使用Google登录
-      const userRef = ref(db, `users/${user.uid}`);
-      
-      // 保存用户数据（无论是否为新用户，都更新信息）
-      await set(userRef, {
-        name: user.displayName || '用户',
-        email: user.email,
-        createdAt: new Date().toISOString(),
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/dashboard`,
+        }
       });
       
-      router.push('/dashboard');
-    } catch (error) {
-      setError('Google 注册失败，请重试');
-    } finally {
+      if (error) throw error;
+      
+      // 注意：对于 OAuth，Supabase 会自动重定向，所以这里不需要手动导航
+    } catch (error: any) {
       setIsGoogleLoading(false);
+      setError('Google 注册失败，请重试');
+      console.error('Google 注册错误:', error.message);
     }
   };
 

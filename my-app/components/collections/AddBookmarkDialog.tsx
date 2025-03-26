@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2, Search, Check } from 'lucide-react';
-import { addBookmarkToCollection, addBookmarksToCollection } from '@/lib/collectionService';
-import { getUserBookmarks, Bookmark } from '@/lib/bookmarkService';
+import { addBookmarkToCollection, addBookmarksToCollection } from '@/lib/supabaseCollectionService';
+import { getUserBookmarks, Bookmark } from '@/lib/supabaseBookmarkService';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -51,7 +51,7 @@ export function AddBookmarkDialog({
         setError('');
         
         // 获取用户的所有书签
-        const userBookmarks = await getUserBookmarks(user.uid);
+        const userBookmarks = await getUserBookmarks(user.id);
         setBookmarks(userBookmarks);
         setFilteredBookmarks(userBookmarks);
       } catch (error) {
@@ -130,7 +130,7 @@ export function AddBookmarkDialog({
       setError('');
       
       // 批量添加所有选中的书签到收藏集
-      await addBookmarksToCollection(user.uid, collectionId, selectedBookmarkIds);
+      await addBookmarksToCollection(user.id, collectionId, selectedBookmarkIds);
       
       setSelectedBookmarkIds([]);
       setSearchQuery('');
