@@ -91,13 +91,22 @@ export async function saveUserBookmarks(
   existingBookmarkIds?: string[];
 }> {
   try {
+    if (!userId) {
+      throw new Error('用户ID不能为空');
+    }
+    
+    console.log(`准备保存书签: ${Object.keys(bookmarks).length} 个, 文件夹: ${Object.keys(folders).length} 个`);
+    
     // 获取现有书签进行对比去重
     const { data: existingBookmarks, error: fetchError } = await supabase
       .from(BOOKMARKS_TABLE)
       .select('id, url')
       .eq('user_id', userId);
       
-    if (fetchError) throw fetchError;
+    if (fetchError) {
+      console.error('获取现有书签失败:', fetchError);
+      throw fetchError;
+    }
     
     // 构造url到id的映射
     const urlToIdMap = new Map();
@@ -122,6 +131,10 @@ export async function saveUserBookmarks(
         existingBookmarkIds.push(urlToIdMap.get(normalizedUrl));
         continue;
       }
+
+      // 将时间戳格式转换为ISO字符串
+      const createdAt = bookmark.createdAt ? new Date(bookmark.createdAt).toISOString() : new Date().toISOString();
+      const addedAt = bookmark.addedAt ? new Date(bookmark.addedAt).toISOString() : new Date().toISOString();
       
       // 准备插入的书签数据
       const bookmarkData = {
@@ -133,8 +146,8 @@ export async function saveUserBookmarks(
         favicon: bookmark.favicon || '',
         tags: bookmark.tags || [],
         folder_id: bookmark.folderId,
-        created_at: bookmark.createdAt || Date.now(),
-        added_at: bookmark.addedAt || Date.now(),
+        created_at: createdAt,
+        added_at: addedAt,
         updated_at: new Date().toISOString(),
         visit_count: bookmark.visitCount || 0,
         is_read: bookmark.isRead || false,
@@ -149,32 +162,49 @@ export async function saveUserBookmarks(
     
     // 批量插入书签
     if (bookmarksToInsert.length > 0) {
+      console.log(`插入 ${bookmarksToInsert.length} 个书签`);
       const { error: insertError } = await supabase
         .from(BOOKMARKS_TABLE)
         .upsert(bookmarksToInsert);
         
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error('插入书签失败:', insertError);
+        throw insertError;
+      }
     }
     
     // 处理文件夹
     if (Object.keys(folders).length > 0) {
-      const foldersToInsert = Object.entries(folders).map(([id, folder]) => ({
-        id,
-        user_id: userId,
-        name: folder.name,
-        color: folder.color || null,
-        icon: folder.icon || null,
-        parent_id: folder.parentId,
-        created_at: folder.createdAt || Date.now(),
-        updated_at: new Date().toISOString()
-      }));
-      
-      const { error: folderError } = await supabase
-        .from(FOLDERS_TABLE)
-        .upsert(foldersToInsert);
+      try {
+        console.log(`处理 ${Object.keys(folders).length} 个文件夹`);
+        const foldersToInsert = Object.entries(folders).map(([id, folder]) => ({
+          id,
+          user_id: userId,
+          name: folder.name,
+          color: folder.color || null,
+          icon: folder.icon || null,
+          parent_id: folder.parentId,
+          created_at: folder.createdAt ? new Date(folder.createdAt).toISOString() : new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }));
         
-      if (folderError) throw folderError;
+        const { error: folderError } = await supabase
+          .from(FOLDERS_TABLE)
+          .upsert(foldersToInsert);
+          
+        if (folderError) {
+          console.error('插入文件夹失败:', folderError);
+          // 文件夹操作失败不影响书签操作结果
+          console.warn('文件夹保存失败，但书签保存成功');
+        }
+      } catch (folderError) {
+        console.error('处理文件夹时出错:', folderError);
+        // 文件夹操作失败不影响书签操作结果
+        console.warn('文件夹保存失败，但书签保存成功');
+      }
     }
+    
+    console.log(`书签导入完成: 重复 ${dbDuplicates}, 保存 ${savedCount}`);
     
     return {
       dbDuplicates,
@@ -182,7 +212,13 @@ export async function saveUserBookmarks(
       existingBookmarkIds
     };
   } catch (error) {
-    console.error('Error saving bookmarks:', error);
+    console.error('保存书签过程中出错:', error);
+    if (error instanceof Error) {
+      console.error('错误详情:', error.message);
+      console.error('错误堆栈:', error.stack);
+    } else {
+      console.error('未知错误类型:', error);
+    }
     throw error;
   }
 }

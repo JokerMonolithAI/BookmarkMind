@@ -11,6 +11,7 @@ import { FileUp, CheckCircle, AlertCircle, FileIcon, X, Loader2, RefreshCw, Zap 
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
+import { generateId } from '@/lib/utils';
 
 export default function BookmarkImport() {
   const { user } = useAuth();
@@ -90,6 +91,10 @@ export default function BookmarkImport() {
 
   const handleFileUpload = async () => {
     if (!selectedFile || !user) {
+      setImportResult({
+        success: false,
+        message: '请先选择文件或登录'
+      });
       return;
     }
 
@@ -108,8 +113,25 @@ export default function BookmarkImport() {
       
       // 1. 解析书签文件并获取去重信息
       console.time('parseBookmarkFile');
-      const { bookmarks: parsedBookmarks, duplicatesCount: importDuplicates } = await parseBookmarkFile(selectedFile);
+      console.log('开始解析文件:', selectedFile.name);
+      let parsedBookmarks;
+      let importDuplicates;
+      
+      try {
+        const result = await parseBookmarkFile(selectedFile);
+        parsedBookmarks = result.bookmarks;
+        importDuplicates = result.duplicatesCount;
+        console.log(`解析完成: 获取到 ${parsedBookmarks.length} 个书签，去重 ${importDuplicates} 个`);
+      } catch (parseError) {
+        console.error('文件解析失败:', parseError);
+        throw new Error(`文件解析失败: ${parseError instanceof Error ? parseError.message : '格式不正确或文件损坏'}`);
+      }
+      
       console.timeEnd('parseBookmarkFile');
+      
+      if (!parsedBookmarks || parsedBookmarks.length === 0) {
+        throw new Error('文件中未找到有效的书签数据');
+      }
       
       // 更新进度 - 解析完成
       updateProgress(40);
@@ -117,13 +139,21 @@ export default function BookmarkImport() {
       // 2. 将去重后的书签转换为对象
       const bookmarksObject: Record<string, ServiceBookmark> = {};
       parsedBookmarks.forEach((bookmark, index) => {
-        // 使用更安全的ID生成方式，避免使用随机数或时间戳中的小数点
-        const id = bookmark.id || `bookmark_${Date.now()}_${index}`;
+        // 使用改进后的 generateId 函数生成唯一 ID
+        const id = bookmark.id || generateId('bm');
+        
+        // 处理日期字段
+        const now = new Date();
+        const createdAt = bookmark.createdAt || now.getTime();
+        const addedAt = bookmark.addedAt || now.getTime();
+        
         // 将Bookmark类型转换为ServiceBookmark类型
         bookmarksObject[id] = {
           ...bookmark,
           id,
           userId: user.id,
+          createdAt,
+          addedAt,
           updatedAt: new Date().toISOString(),
           visitCount: 0,
           isRead: false,
@@ -132,12 +162,24 @@ export default function BookmarkImport() {
         };
       });
       
+      console.log(`准备导入 ${Object.keys(bookmarksObject).length} 个书签`);
+      
       // 更新进度 - 转换完成
       updateProgress(50);
       
       // 3. 与数据库中的书签对比去重并保存
       console.time('saveUserBookmarks');
-      const result = await saveUserBookmarks(user.id, bookmarksObject, {});
+      console.log('开始保存书签到数据库');
+      
+      let result;
+      try {
+        result = await saveUserBookmarks(user.id, bookmarksObject, {});
+        console.log('书签保存结果:', result);
+      } catch (saveError) {
+        console.error('保存书签失败:', saveError);
+        throw new Error(`保存书签失败: ${saveError instanceof Error ? saveError.message : '数据库错误'}`);
+      }
+      
       console.timeEnd('saveUserBookmarks');
       
       // 更新进度 - 保存完成
@@ -157,17 +199,25 @@ export default function BookmarkImport() {
               url: bookmark.url
             }));
           
+          console.log(`准备分析 ${bookmarksToAnalyze.length} 个书签`);
+          
           if (bookmarksToAnalyze.length > 0) {
-            
-            // 调用批量分析API
-            const analysisResult = await apiService.analyzeBatchBookmarks(
-              bookmarksToAnalyze,
-              analysisOptions
-            );
-            
-            analyzedCount = analysisResult.successCount;
+            try {
+              // 调用批量分析API
+              const analysisResult = await apiService.analyzeBatchBookmarks(
+                bookmarksToAnalyze,
+                analysisOptions
+              );
+              
+              analyzedCount = analysisResult.successCount;
+              console.log(`分析完成: ${analyzedCount} 个书签已分析`);
+            } catch (analysisError) {
+              console.error('分析书签失败:', analysisError);
+              // 分析失败不影响整体导入流程，继续执行
+            }
           }
         } catch (error) {
+          console.error('准备分析数据时出错:', error);
           // 分析失败不影响整体导入流程，继续执行
         }
       }
@@ -192,13 +242,31 @@ export default function BookmarkImport() {
       // 这样可以确保文件信息区域保持隐藏
       
     } catch (error) {
+      console.error('导入过程发生错误:', error);
       
       // 设置进度为0
       updateProgress(0);
       
+      let errorMessage = '导入失败';
+      
+      if (error instanceof Error) {
+        errorMessage = `${errorMessage}: ${error.message}`;
+        console.error('错误详情:', error.stack);
+      } else if (typeof error === 'string') {
+        errorMessage = `${errorMessage}: ${error}`;
+      } else if (error && typeof error === 'object') {
+        try {
+          errorMessage = `${errorMessage}: ${JSON.stringify(error)}`;
+        } catch {
+          errorMessage = `${errorMessage}: 未知对象错误`;
+        }
+      } else {
+        errorMessage = `${errorMessage}: 未知错误`;
+      }
+      
       setImportResult({
         success: false,
-        message: `导入失败: ${error instanceof Error ? error.message : '未知错误'}`
+        message: errorMessage
       });
       
       // 导入失败时，设置 isImporting = false，显示文件信息

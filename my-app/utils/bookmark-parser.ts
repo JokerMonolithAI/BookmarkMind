@@ -1,5 +1,36 @@
 import { Bookmark } from '../types/bookmark';
 import { normalizeUrl, isValidUrl } from './url-utils';
+import { generateId } from '@/lib/utils';
+
+/**
+ * 安全地解析时间戳
+ * 确保返回的时间戳在PostgreSQL支持的范围内
+ * @param timestamp 原始时间戳（可能是秒或毫秒）
+ * @returns 标准化的时间戳
+ */
+function safeParseTimestamp(timestamp: string | number | null | undefined): number {
+  if (!timestamp) {
+    return Date.now();
+  }
+  
+  try {
+    let ts = typeof timestamp === 'string' ? parseInt(timestamp) : timestamp as number;
+    
+    // 检查是否是秒级时间戳(Chrome书签通常是秒级)
+    if (ts < 10000000000) { // 小于2286年的秒级时间戳
+      ts = ts * 1000; // 转为毫秒
+    }
+    
+    // 确保时间戳在合理范围内(1970-2038年之间)
+    if (ts < 0 || ts > 2145916800000) { // 2038-01-19的毫秒时间戳
+      return Date.now();
+    }
+    
+    return ts;
+  } catch (e) {
+    return Date.now();
+  }
+}
 
 /**
  * 解析书签文件
@@ -93,16 +124,19 @@ const parseJsonBookmarks = (content: string): Bookmark[] => {
     
     // 处理通用JSON格式
     if (Array.isArray(data)) {
-      return data.map(item => ({
-        id: item.id || `bookmark_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        url: item.url,
-        title: item.title || item.name || '未命名书签',
-        description: item.description || '',
-        favicon: item.favicon || '',
-        createdAt: item.createdAt || item.dateAdded || Date.now(),
-        addedAt: Date.now(),
-        tags: item.tags || []
-      }));
+      return data.map(item => {
+        const now = Date.now();
+        return {
+          id: item.id || generateId('bm'),
+          url: item.url,
+          title: item.title || item.name || '未命名书签',
+          description: item.description || '',
+          favicon: item.favicon || '',
+          createdAt: safeParseTimestamp(item.createdAt || item.dateAdded),
+          addedAt: now,
+          tags: item.tags || []
+        };
+      });
     }
     
     throw new Error('不支持的JSON格式');
@@ -129,14 +163,15 @@ const parseHtmlBookmarks = (content: string): Bookmark[] => {
       const title = link.textContent || '未命名书签';
       const addDate = link.getAttribute('add_date') || link.getAttribute('dateAdded');
       const icon = link.getAttribute('icon') || '';
+      const now = Date.now();
       
       bookmarks.push({
-        id: `bookmark_${Date.now()}_${index}`,
+        id: generateId('bm'),
         url,
         title,
         favicon: icon,
-        createdAt: addDate ? parseInt(addDate) * 1000 : Date.now(),
-        addedAt: Date.now(),
+        createdAt: safeParseTimestamp(addDate),
+        addedAt: now,
         description: '',
         tags: []
       });
@@ -155,14 +190,15 @@ const extractChromeBookmarks = (roots: any): Bookmark[] => {
   // 递归函数提取书签
   const extractBookmarksRecursive = (node: any, index: number) => {
     if (node.type === 'url') {
+      const now = Date.now();
       bookmarks.push({
-        id: `bookmark_${Date.now()}_${bookmarks.length}`,
+        id: generateId('bm'),
         url: node.url,
         title: node.name || '未命名书签',
         description: '',
         favicon: '',
-        createdAt: node.date_added ? parseInt(node.date_added) : Date.now(),
-        addedAt: Date.now(),
+        createdAt: safeParseTimestamp(node.date_added),
+        addedAt: now,
         tags: []
       });
     }
@@ -187,14 +223,15 @@ const extractFirefoxBookmarks = (root: any): Bookmark[] => {
   // 递归函数提取书签
   const extractBookmarksRecursive = (node: any, index: number) => {
     if (node.type === 'bookmark') {
+      const now = Date.now();
       bookmarks.push({
-        id: `bookmark_${Date.now()}_${bookmarks.length}`,
+        id: generateId('bm'),
         url: node.uri,
         title: node.title || '未命名书签',
         description: '',
         favicon: node.iconuri || '',
-        createdAt: node.dateAdded || Date.now(),
-        addedAt: Date.now(),
+        createdAt: safeParseTimestamp(node.dateAdded),
+        addedAt: now,
         tags: []
       });
     }

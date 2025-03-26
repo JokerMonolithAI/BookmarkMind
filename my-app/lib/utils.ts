@@ -11,16 +11,16 @@ export function cn(...inputs: ClassValue[]) {
 
 /**
  * 生成随机ID
- * @param length ID长度，默认为10
- * @returns 随机生成的ID字符串
+ * 使用时间戳+随机字符串的方式生成，确保唯一性
+ * @param prefix 可选前缀
+ * @returns 随机生成的唯一ID字符串
  */
-export function generateId(length: number = 10): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
+export function generateId(prefix: string = ''): string {
+  const timestamp = Date.now().toString();
+  const randomPart = Math.random().toString(36).substring(2, 10); // 使用更短的随机部分
+  
+  // 组合时间戳和随机部分，如有前缀则添加
+  return `${prefix ? `${prefix}_` : ''}${timestamp}_${randomPart}`;
 }
 
 /**
