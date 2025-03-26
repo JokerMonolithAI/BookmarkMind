@@ -101,6 +101,79 @@ body {
   box-shadow: 0 10px 15px -3px rgba(22, 163, 74, 0.2), 0 4px 6px -4px rgba(22, 163, 74, 0.3);
 }
 
+/* 书签卡片动画效果 - 强化版 */
+.bookmark-card-hover {
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.bookmark-card-hover:hover {
+  transform: translateY(-6px) scale(1.01);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  border-color: transparent;
+  z-index: 10;
+}
+
+.dark .bookmark-card-hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.15);
+}
+
+.dark .bookmark-card-hover:hover {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* 卡片渐变部分更强的动画效果 */
+.bookmark-card-hover .card-gradient-purple,
+.bookmark-card-hover .card-gradient-orange,
+.bookmark-card-hover .card-gradient-green {
+  transition: all 0.4s ease;
+}
+
+.bookmark-card-hover:hover .card-gradient-purple {
+  background: linear-gradient(135deg, #c084fc 0%, #8b5cf6 100%);
+  box-shadow: 0 12px 18px -3px rgba(139, 92, 246, 0.4), 0 6px 8px -4px rgba(139, 92, 246, 0.5);
+}
+
+.bookmark-card-hover:hover .card-gradient-orange {
+  background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
+  box-shadow: 0 12px 18px -3px rgba(234, 88, 12, 0.4), 0 6px 8px -4px rgba(234, 88, 12, 0.5);
+}
+
+.bookmark-card-hover:hover .card-gradient-green {
+  background: linear-gradient(135deg, #4ade80 0%, #16a34a 100%);
+  box-shadow: 0 12px 18px -3px rgba(22, 163, 74, 0.4), 0 6px 8px -4px rgba(22, 163, 74, 0.5);
+}
+
+/* 卡片标签样式优化 */
+.card-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.65rem;
+  font-weight: 500;
+  line-height: 1;
+  transition: all 0.2s ease;
+}
+
+.card-tag:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 卡片PDF区域强化 */
+.bookmark-card-hover .pdf-container {
+  transition: all 0.3s ease;
+}
+
+.bookmark-card-hover:hover .pdf-container {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+}
+
 /* React Flow 样式 */
 .react-flow__node {
   transition: transform 0.3s ease, box-shadow 0.3s ease;

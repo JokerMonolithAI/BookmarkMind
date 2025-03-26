@@ -6,7 +6,8 @@ import { eventService, EVENTS } from '@/lib/eventService';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
-import { useView } from '@/components/dashboard/ViewToggle';
+import { useView as useDashboardView } from '@/components/dashboard/ViewToggle';
+import { useView as useBookmarksView } from '@/components/bookmarks/ViewToggle';
 import { Tag, getBookmarkTags } from '@/lib/supabaseTagService';
 import { getBookmarkCollections } from '@/lib/supabaseCollectionService';
 import { getUserBookmarks, deleteBookmark, updateBookmark, Bookmark } from '@/lib/supabaseBookmarkService';
@@ -57,7 +58,14 @@ export default function BookmarkList({
   timeRange = 'all'
 }: BookmarkListProps) {
   const { user } = useAuth();
-  const { activeView } = useView();
+  // 获取当前页面路径，决定使用哪个view hook
+  const isDashboardPage = typeof window !== 'undefined' && window.location.pathname.includes('/dashboard');
+  // 根据页面选择对应的视图上下文
+  const dashboardViewContext = useDashboardView();
+  const bookmarksViewContext = useBookmarksView();
+  // 使用对应页面的activeView
+  const activeView = isDashboardPage ? dashboardViewContext.activeView : bookmarksViewContext.activeView;
+  
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [filteredBookmarks, setFilteredBookmarks] = useState<Bookmark[]>([]);
   const [loading, setLoading] = useState(true);
@@ -340,7 +348,8 @@ export default function BookmarkList({
       url.includes('dev.') ||
       url.includes('translate.google') ||
       title.includes('工具') ||
-      title.includes('翻译')
+      title.includes('翻译') ||
+      title.includes('google')
     ) {
       return 'card-gradient-purple';
     }
@@ -355,7 +364,9 @@ export default function BookmarkList({
       url.includes('feishu') ||
       title.includes('ai') ||
       title.includes('人工智能') ||
-      title.includes('机器学习')
+      title.includes('机器学习') ||
+      title.includes('agi') ||
+      title.includes('飞书')
     ) {
       return 'card-gradient-orange';
     }
@@ -370,13 +381,18 @@ export default function BookmarkList({
       url.includes('platform') ||
       url.includes('kancloud') ||
       title.includes('框架') ||
-      title.includes('platform')
+      title.includes('platform') ||
+      title.includes('前言') ||
+      title.includes('capacity') ||
+      title.includes('cloud')
     ) {
       return 'card-gradient-green';
     }
     
-    // 默认返回空字符串，使用默认样式
-    return '';
+    // 默认情况下随机一个渐变色
+    const gradients = ['card-gradient-purple', 'card-gradient-orange', 'card-gradient-green'];
+    const randomIndex = Math.floor(bookmark.id.charCodeAt(0) % 3);
+    return gradients[randomIndex];
   };
 
   // 渲染标签
@@ -396,13 +412,13 @@ export default function BookmarkList({
               backgroundColor: tag.bgColor,
               color: tag.textColor
             }}
-            className="text-xs px-1.5 py-0.5 h-4"
+            className="text-xs px-1.5 py-0.5 h-4 card-tag"
           >
             {tag.name}
           </Badge>
         ))}
         {metadata.tags.length > 3 && (
-          <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-4">
+          <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-4 card-tag">
             +{metadata.tags.length - 3}
           </Badge>
         )}
@@ -424,13 +440,13 @@ export default function BookmarkList({
           <Badge 
             key={collection.id}
             variant="secondary"
-            className="text-xs px-1.5 py-0.5 h-4"
+            className="text-xs px-1.5 py-0.5 h-4 card-tag"
           >
             {collection.name}
           </Badge>
         ))}
         {metadata.collections.length > 2 && (
-          <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-4">
+          <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-4 card-tag">
             +{metadata.collections.length - 2}
           </Badge>
         )}
@@ -617,7 +633,7 @@ export default function BookmarkList({
     const pdfData = bookmark.pdf;
     
     return (
-      <div className="flex items-center justify-between mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors">
+      <div className="flex items-center justify-between mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors pdf-container">
         <a 
           href={pdfData.url} 
           target="_blank" 
@@ -712,84 +728,92 @@ export default function BookmarkList({
 
     const currentPageBookmarks = getCurrentPageBookmarks();
 
+    // 在仪表盘页面始终使用网格布局，在书签页面根据activeView决定
+    const useGridLayout = isDashboardPage || activeView === 'grid';
+
     return (
-      <div className={`grid grid-cols-1 ${activeView === 'grid' ? 'md:grid-cols-3 lg:grid-cols-4' : ''} gap-4`}>
+      <div className={`grid grid-cols-1 ${useGridLayout ? 'md:grid-cols-3 lg:grid-cols-4' : ''} gap-4`}>
         {currentPageBookmarks.map(bookmark => {
           const cardClass = getBookmarkCardClass(bookmark);
           const hasGradient = cardClass !== '';
           
-          if (activeView === 'list') {
-            // 列表视图 - 优化为左侧彩色背景
+          // 在仪表盘页面或网格视图下使用卡片样式
+          if (useGridLayout) {
             return (
               <div 
                 key={bookmark.id}
-                className="rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-all duration-300 flex"
+                className="rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-lg transition-all duration-300 bookmark-card-hover"
               >
-                {/* 左侧彩色背景区域 */}
-                <div className={`${hasGradient ? cardClass : 'bg-gray-100 dark:bg-gray-700'} w-2 flex-shrink-0`}></div>
-                
-                <div className="flex items-start p-3 flex-grow">
-                  {/* 图标 */}
-                  <div className="flex-shrink-0 mr-3">
-                    {bookmark.favicon ? (
-                      <img 
-                        src={bookmark.favicon} 
-                        alt="" 
-                        className="w-8 h-8 rounded-md"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = '/globe.svg';
-                        }}
-                      />
-                    ) : (
-                      <div className={`w-8 h-8 ${hasGradient ? cardClass : 'bg-gray-100 dark:bg-gray-700'} rounded-md flex items-center justify-center`}>
-                        <ExternalLink className={`h-4 w-4 ${hasGradient ? 'text-white' : 'text-gray-500 dark:text-gray-400'}`} />
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* 内容 */}
-                  <div className="flex-1 min-w-0">
-                    <h2 className="text-base font-semibold leading-tight line-clamp-1 text-gray-900 dark:text-gray-100">
-                      {bookmark.title || '无标题'}
-                    </h2>
+                <div className="flex flex-col h-full">
+                  {/* 上半部分背景色区域 */}
+                  <div className={`${cardClass} p-4 h-32`}>
+                    {/* 标题区域 */}
+                    <div className="mb-1">
+                      <h2 className="text-base font-bold leading-tight line-clamp-2 text-white">
+                        {bookmark.title || '无标题'}
+                      </h2>
+                    </div>
                     
+                    {/* 描述区域 */}
                     {bookmark.description && (
-                      <p className="mt-0.5 text-xs line-clamp-1 text-gray-600 dark:text-gray-300">
+                      <p className="text-xs line-clamp-2 text-white/90">
                         {bookmark.description}
                       </p>
                     )}
-                    
+                  </div>
+                  
+                  {/* 下半部分白色区域 */}
+                  <div className="bg-white dark:bg-gray-800 p-3 flex-grow flex flex-col">
                     {/* 渲染PDF文件 */}
                     {renderPdfFile(bookmark)}
                     
                     {/* 渲染PDF上传区域 */}
-                    {renderPdfUploadArea(bookmark)}
+                    {renderPdfUploadArea(bookmark, true)}
                     
                     {/* 添加标签和收藏集展示 */}
                     {renderTags(bookmark.id)}
                     {renderCollections(bookmark.id)}
                     
-                    <div className="flex items-center justify-between mt-1">
-                      <a 
-                        href={bookmark.url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
-                      >
-                        {new URL(bookmark.url).hostname}
-                      </a>
+                    {/* 底部信息区域 */}
+                    <div className="mt-auto">
+                      {/* 分隔线 */}
+                      <div className="border-t border-gray-100 dark:border-gray-700 my-1.5"></div>
                       
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {formatDate(bookmark.addedAt || bookmark.createdAt)}
-                        </span>
-                        
-                        <button
-                          onClick={() => setBookmarkToDelete(bookmark.id)}
-                          className="p-1 rounded-full text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      {/* 链接和操作区域 */}
+                      <div className="flex items-center justify-between">
+                        <a 
+                          href={bookmark.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
                         >
-                          <Trash className="h-3 w-3" />
-                        </button>
+                          <div className="flex items-center">
+                            {bookmark.favicon ? (
+                              <img 
+                                src={bookmark.favicon} 
+                                alt="" 
+                                className="w-3.5 h-3.5 mr-1.5 rounded-sm"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = '/globe.svg';
+                                }}
+                              />
+                            ) : (
+                              <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                            )}
+                            <span className="text-xs truncate max-w-[120px]">
+                              {new URL(bookmark.url).hostname}
+                            </span>
+                          </div>
+                        </a>
+                        
+                        <div className="flex items-center">
+                          <button
+                            onClick={() => setBookmarkToDelete(bookmark.id)}
+                            className="p-1 rounded-full text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                          >
+                            <Trash className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -798,86 +822,77 @@ export default function BookmarkList({
             );
           }
           
-          // 网格视图 - 缩小卡片尺寸
+          // 列表视图
           return (
             <div 
               key={bookmark.id}
-              className="rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-all duration-200 transform hover:-translate-y-1"
+              className="rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-all duration-300 flex bookmark-card-hover"
             >
-              <div className="flex flex-col h-full">
-                {/* 上半部分背景色区域 - 减小高度为h-32 */}
-                <div className={`${hasGradient ? cardClass : 'bg-white dark:bg-gray-800'} p-4 h-32`}>
-                  {/* 标题区域 */}
-                  <div className="mb-1">
-                    <h2 className={`text-base font-bold leading-tight line-clamp-2 ${
-                      hasGradient ? 'text-white' : 'text-gray-900 dark:text-gray-100'
-                    }`}>
-                      {bookmark.title || '无标题'}
-                    </h2>
-                  </div>
-                  
-                  {/* 描述区域 */}
-                  {bookmark.description && (
-                    <p className={`text-xs line-clamp-2 ${
-                      hasGradient ? 'text-white/90' : 'text-gray-600 dark:text-gray-300'
-                    }`}>
-                      {bookmark.description}
-                    </p>
+              {/* 左侧彩色背景区域 */}
+              <div className={`${hasGradient ? cardClass : 'bg-gray-100 dark:bg-gray-700'} w-2 flex-shrink-0`}></div>
+              
+              <div className="flex items-start p-3 flex-grow">
+                {/* 图标 */}
+                <div className="flex-shrink-0 mr-3">
+                  {bookmark.favicon ? (
+                    <img 
+                      src={bookmark.favicon} 
+                      alt="" 
+                      className="w-8 h-8 rounded-md"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = '/globe.svg';
+                      }}
+                    />
+                  ) : (
+                    <div className={`w-8 h-8 ${hasGradient ? cardClass : 'bg-gray-100 dark:bg-gray-700'} rounded-md flex items-center justify-center`}>
+                      <ExternalLink className={`h-4 w-4 ${hasGradient ? 'text-white' : 'text-gray-500 dark:text-gray-400'}`} />
+                    </div>
                   )}
                 </div>
                 
-                {/* 下半部分白色区域 - 减小内边距 */}
-                <div className="bg-white dark:bg-gray-800 p-3 flex-grow flex flex-col">
+                {/* 内容 */}
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-base font-semibold leading-tight line-clamp-1 text-gray-900 dark:text-gray-100">
+                    {bookmark.title || '无标题'}
+                  </h2>
+                  
+                  {bookmark.description && (
+                    <p className="mt-0.5 text-xs line-clamp-1 text-gray-600 dark:text-gray-300">
+                      {bookmark.description}
+                    </p>
+                  )}
+                  
                   {/* 渲染PDF文件 */}
                   {renderPdfFile(bookmark)}
                   
                   {/* 渲染PDF上传区域 */}
-                  {renderPdfUploadArea(bookmark, true)}
+                  {renderPdfUploadArea(bookmark)}
                   
                   {/* 添加标签和收藏集展示 */}
                   {renderTags(bookmark.id)}
                   {renderCollections(bookmark.id)}
                   
-                  {/* 底部信息区域 */}
-                  <div className="mt-auto">
-                    {/* 分隔线 */}
-                    <div className="border-t border-gray-100 dark:border-gray-700 my-1.5"></div>
+                  <div className="flex items-center justify-between mt-1">
+                    <a 
+                      href={bookmark.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                    >
+                      {new URL(bookmark.url).hostname}
+                    </a>
                     
-                    {/* 链接和操作区域 */}
-                    <div className="flex items-center justify-between">
-                      <a 
-                        href={bookmark.url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="flex items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
-                      >
-                        <div className="flex items-center">
-                          {bookmark.favicon ? (
-                            <img 
-                              src={bookmark.favicon} 
-                              alt="" 
-                              className="w-3.5 h-3.5 mr-1.5 rounded-sm"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = '/globe.svg';
-                              }}
-                            />
-                          ) : (
-                            <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                          )}
-                          <span className="text-xs truncate max-w-[120px]">
-                            {new URL(bookmark.url).hostname}
-                          </span>
-                        </div>
-                      </a>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {formatDate(bookmark.addedAt || bookmark.createdAt)}
+                      </span>
                       
-                      <div className="flex items-center">
-                        <button
-                          onClick={() => setBookmarkToDelete(bookmark.id)}
-                          className="p-1 rounded-full text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800"
-                        >
-                          <Trash className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => setBookmarkToDelete(bookmark.id)}
+                        className="p-1 rounded-full text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      >
+                        <Trash className="h-3 w-3" />
+                      </button>
                     </div>
                   </div>
                 </div>
