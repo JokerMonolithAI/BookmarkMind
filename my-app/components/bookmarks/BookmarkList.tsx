@@ -90,6 +90,15 @@ export default function BookmarkList({
       setLoading(true);
       // 使用 Supabase 服务获取书签
       const bookmarksArray = await getUserBookmarks(user.id);
+      
+      // 调试输出，检查PDF数据
+      console.log('获取到的书签数据:', bookmarksArray);
+      const hasPDF = bookmarksArray.some(b => b.pdf);
+      console.log('是否有PDF文件:', hasPDF);
+      if (hasPDF) {
+        console.log('包含PDF的书签:', bookmarksArray.filter(b => b.pdf));
+      }
+      
       setBookmarks(bookmarksArray);
     } catch (error) {
       console.error('Error fetching bookmarks:', error);
@@ -454,7 +463,7 @@ export default function BookmarkList({
     );
   };
 
-  // 添加处理PDF上传的函数 - 使用 Supabase Storage
+  // 修改 handlePdfUpload 函数
   const handlePdfUpload = async (bookmarkId: string, file: File) => {
     if (!user || isUploading) return;
     
@@ -478,19 +487,6 @@ export default function BookmarkList({
       return;
     }
     
-    // 找到书签对象
-    const bookmark = bookmarks.find(b => b.id === bookmarkId);
-    
-    // 检查是否已有PDF文件
-    if (bookmark?.pdf) {
-      toast({
-        title: "已存在PDF文件",
-        description: "每个书签只能上传一个PDF文件，请先删除现有文件",
-        variant: "destructive",
-      });
-      return;
-    }
-    
     try {
       setIsUploading(true);
       setUploadingBookmarkId(bookmarkId);
@@ -498,7 +494,8 @@ export default function BookmarkList({
       
       const timestamp = Date.now();
       const fileName = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9_\-.]/g, '_')}`;
-      const filePath = `${user.id}/${bookmarkId}/${fileName}`;
+      // 创建一个更简短、无特殊字符的文件路径
+      const filePath = `${user.id}/${bookmarkId.substring(0, 10)}/${timestamp}_${bookmarkId.substring(0, 8)}.pdf`;
       
       // 上传文件到 Supabase Storage
       const { data, error } = await supabase.storage
@@ -517,6 +514,8 @@ export default function BookmarkList({
         
       if (!publicUrlData.publicUrl) throw new Error('Failed to get public URL');
       
+      console.log('上传文件成功，公共URL:', publicUrlData.publicUrl);
+      
       // 更新书签添加 PDF 信息
       const pdfData = {
         url: publicUrlData.publicUrl,
@@ -527,18 +526,20 @@ export default function BookmarkList({
       };
       
       // 更新 Supabase 数据库中的书签
-      await updateBookmark(user.id, bookmarkId, { pdf: pdfData });
+      const { error: updateError } = await supabase
+        .from('bookmarks')
+        .update({ pdf: pdfData })
+        .eq('id', bookmarkId)
+        .eq('user_id', user.id);
+
+      if (updateError) throw updateError;
       
-      // 更新本地状态
-      setBookmarks(prev => prev.map(b => {
-        if (b.id === bookmarkId) {
-          return {
-            ...b,
-            pdf: pdfData
-          };
-        }
-        return b;
-      }));
+      // 更新本地状态 - 同时更新 bookmarks 和 filteredBookmarks
+      const updateBookmarkState = (bookmarks: Bookmark[]) => 
+        bookmarks.map(b => b.id === bookmarkId ? { ...b, pdf: pdfData } : b);
+      
+      setBookmarks(updateBookmarkState);
+      setFilteredBookmarks(updateBookmarkState);
       
       toast({
         title: "PDF上传成功",
@@ -549,12 +550,13 @@ export default function BookmarkList({
       console.error('Error handling PDF upload:', error);
       toast({
         title: "上传PDF失败",
-        description: "请稍后再试",
+        description: error instanceof Error ? error.message : "请稍后再试",
         variant: "destructive",
       });
     } finally {
       setIsUploading(false);
       setUploadingBookmarkId(null);
+      setUploadProgress(0);
     }
   };
 
@@ -628,35 +630,65 @@ export default function BookmarkList({
 
   // 渲染PDF文件
   const renderPdfFile = (bookmark: Bookmark) => {
-    if (!bookmark.pdf) return null;
+    // 调试 PDF 数据
+    console.log('渲染PDF文件，书签ID:', bookmark.id);
+    console.log('PDF数据:', bookmark.pdf);
     
-    const pdfData = bookmark.pdf;
+    if (!bookmark.pdf) {
+      console.log('书签没有PDF数据');
+      return null;
+    }
     
-    return (
-      <div className="flex items-center justify-between mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors pdf-container">
-        <a 
-          href={pdfData.url} 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="flex items-center text-blue-600 dark:text-blue-400 flex-1 min-w-0 group"
-        >
-          <div className="bg-blue-100 dark:bg-blue-800 p-1.5 rounded-md mr-2 group-hover:bg-blue-200 dark:group-hover:bg-blue-700 transition-colors">
-            <File className="h-3.5 w-3.5 text-blue-700 dark:text-blue-300" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <span className="text-xs font-medium truncate block">{pdfData.name}</span>
-            <span className="text-xs text-gray-500 dark:text-gray-400">点击查看PDF</span>
-          </div>
-        </a>
-        <button
-          onClick={() => setPdfToDelete({bookmarkId: bookmark.id, fileName: pdfData.name})}
-          className="ml-2 p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex-shrink-0 transition-colors"
-          aria-label="删除PDF文件"
-        >
-          <Trash className="h-3.5 w-3.5" />
-        </button>
-      </div>
-    );
+    try {
+      const pdfData = bookmark.pdf;
+      
+      console.log('准备渲染PDF:', pdfData.name);
+      
+      // 创建一个可点击的链接，将在新窗口打开文件
+      return (
+        <div className="flex items-center justify-between mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors pdf-container">
+          <a 
+            href={pdfData.url} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="flex items-center text-blue-600 dark:text-blue-400 flex-1 min-w-0 group"
+            onClick={(e) => {
+              // 在点击时检查URL是否有效
+              if (!pdfData.url || pdfData.url.includes('null') || pdfData.url.includes('undefined')) {
+                e.preventDefault();
+                toast({
+                  title: "无法访问PDF",
+                  description: "文件链接无效，请尝试重新上传",
+                  variant: "destructive",
+                });
+              }
+            }}
+          >
+            <div className="bg-blue-100 dark:bg-blue-800 p-1.5 rounded-md mr-2 group-hover:bg-blue-200 dark:group-hover:bg-blue-700 transition-colors">
+              <File className="h-3.5 w-3.5 text-blue-700 dark:text-blue-300" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="text-xs font-medium truncate block">{pdfData.name}</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">点击查看PDF</span>
+            </div>
+          </a>
+          <button
+            onClick={() => setPdfToDelete({bookmarkId: bookmark.id, fileName: pdfData.name})}
+            className="ml-2 p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex-shrink-0 transition-colors"
+            aria-label="删除PDF文件"
+          >
+            <Trash className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      );
+    } catch (error) {
+      console.error('渲染PDF时出错:', error, bookmark);
+      return (
+        <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800 text-xs text-red-600">
+          PDF加载错误，请重试
+        </div>
+      );
+    }
   };
 
   // 渲染PDF上传区域 - 更新以适应新的数据结构

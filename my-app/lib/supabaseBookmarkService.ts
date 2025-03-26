@@ -248,6 +248,8 @@ export async function getUserBookmarks(userId: string): Promise<Bookmark[]> {
       return [];
     }
     
+    console.log('获取到的书签数据示例:', data[0]);
+    
     // 将数据库结果转换为应用格式
     const bookmarks: Bookmark[] = data.map(item => ({
       id: item.id,
@@ -265,6 +267,7 @@ export async function getUserBookmarks(userId: string): Promise<Bookmark[]> {
       isRead: item.is_read || false,
       isFavorite: item.is_favorite || false,
       type: item.type || 'article',
+      pdf: item.pdf || undefined,
       analysis: item.analysis || {}
     }));
     

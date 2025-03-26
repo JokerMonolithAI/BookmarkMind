@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS bookmarks (
   is_read BOOLEAN DEFAULT false,
   is_favorite BOOLEAN DEFAULT false,
   type TEXT DEFAULT 'article',
-  analysis JSONB DEFAULT '{}'
+  analysis JSONB DEFAULT '{}',
+  pdf jsonb DEFAULT NULL
 );
 
 -- 书签文件夹表
@@ -199,4 +200,37 @@ BEGIN
                           table_name, column_name, column_name);
     EXECUTE update_query USING decrement_by, row_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER; 
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 修改存储桶访问策略，允许公共访问
+drop policy if exists "Allow public access to bookmarks" on storage.objects;
+create policy "Allow public access to bookmarks"
+on storage.objects for select
+using (bucket_id = 'bookmarks');
+
+-- 允许已认证用户上传文件
+drop policy if exists "Allow authenticated users to upload files" on storage.objects;
+create policy "Allow authenticated users to upload files"
+on storage.objects for insert to authenticated
+with check (
+  bucket_id = 'bookmarks' AND
+  auth.uid() = (storage.foldername(name))[1]::uuid
+);
+
+-- 允许已认证用户访问自己的文件
+drop policy if exists "Allow authenticated users to read their own files" on storage.objects;
+create policy "Allow authenticated users to read their own files"
+on storage.objects for select to authenticated
+using (
+  bucket_id = 'bookmarks' AND
+  auth.uid() = (storage.foldername(name))[1]::uuid
+);
+
+-- 允许已认证用户删除自己的文件
+drop policy if exists "Allow authenticated users to delete their own files" on storage.objects;
+create policy "Allow authenticated users to delete their own files"
+on storage.objects for delete to authenticated
+using (
+  bucket_id = 'bookmarks' AND
+  auth.uid() = (storage.foldername(name))[1]::uuid
+); 
