@@ -223,6 +223,7 @@ export default function BookmarkList({
       // 获取书签详情，检查是否有 PDF 需要删除
       const bookmark = bookmarks.find(b => b.id === bookmarkId);
       if (bookmark?.pdf?.storagePath) {
+        console.log('删除书签时发现关联PDF文件，正在删除...');
         // 从 Supabase Storage 删除 PDF 文件
         const { error: storageError } = await supabase.storage
           .from('bookmarks')
@@ -230,14 +231,18 @@ export default function BookmarkList({
           
         if (storageError) {
           console.error('Error deleting PDF file:', storageError);
+          // 继续删除书签，即使PDF文件删除失败
+        } else {
+          console.log('PDF文件删除成功');
         }
       }
       
       // 使用 Supabase 服务删除书签
       await deleteBookmark(user.id, bookmarkId);
       
-      // 更新本地状态
+      // 更新本地状态 - 同时更新两个列表
       setBookmarks(prev => prev.filter(bookmark => bookmark.id !== bookmarkId));
+      setFilteredBookmarks(prev => prev.filter(bookmark => bookmark.id !== bookmarkId));
       
       toast({
         title: "书签已删除",
@@ -589,12 +594,27 @@ export default function BookmarkList({
         
       if (storageError) throw storageError;
       
-      // 更新书签数据，移除 PDF 信息
-      // 使用 undefined 而不是 null 更新 pdf 字段
-      await updateBookmark(user.id, bookmarkId, { pdf: undefined });
+      // 使用 Supabase 直接更新数据库，将 pdf 字段设为 null
+      const { error: updateError } = await supabase
+        .from('bookmarks')
+        .update({ pdf: null })
+        .eq('id', bookmarkId)
+        .eq('user_id', user.id);
+        
+      if (updateError) throw updateError;
       
       // 更新本地状态
       setBookmarks(prev => prev.map(b => {
+        if (b.id === bookmarkId) {
+          // 创建一个新对象，但不包含 pdf 属性
+          const { pdf, ...rest } = b;
+          return rest as Bookmark;
+        }
+        return b;
+      }));
+      
+      // 同时更新过滤后的书签列表
+      setFilteredBookmarks(prev => prev.map(b => {
         if (b.id === bookmarkId) {
           // 创建一个新对象，但不包含 pdf 属性
           const { pdf, ...rest } = b;
