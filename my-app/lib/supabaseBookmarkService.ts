@@ -16,6 +16,7 @@ export interface Bookmark extends BookmarkType {
   isRead: boolean;
   isFavorite: boolean;
   type?: 'article' | 'video' | 'image' | 'document' | 'other';
+  category?: string;
   pdf?: {
     url: string;
     name: string;
@@ -25,7 +26,6 @@ export interface Bookmark extends BookmarkType {
     expires?: number;
   };
   analysis?: {
-    category?: string;
     tags?: string[];
     summary?: string;
     sentiment?: string;
@@ -269,6 +269,7 @@ export async function getUserBookmarks(userId: string): Promise<Bookmark[]> {
       isFavorite: item.is_favorite || false,
       type: item.type || 'article',
       pdf: item.pdf || undefined,
+      category: item.category || undefined,
       analysis: item.analysis || {}
     }));
     
@@ -447,8 +448,8 @@ export async function getUserBookmarkCategories(userId: string): Promise<string[
     
     // 遍历所有书签，提取分类信息
     bookmarks.forEach(bookmark => {
-      if (bookmark.analysis && bookmark.analysis.category) {
-        categories.add(bookmark.analysis.category);
+      if (bookmark.category && bookmark.category) {
+        categories.add(bookmark.category);
       }
     });
     
@@ -556,32 +557,45 @@ export async function getUserBookmarksByIds(userId: string, bookmarkIds: string[
  */
 export async function updateBookmarkCategory(userId: string, oldCategory: string, newCategory: string): Promise<void> {
   try {
-    // 获取用户所有书签
-    const bookmarks = await getUserBookmarks(userId);
+    // 获取所有具有指定旧分类的书签
+    const { data, error } = await supabase
+      .from(BOOKMARKS_TABLE)
+      .select('id')
+      .eq('user_id', userId)
+      .eq('category', oldCategory);
     
-    // 找出所有属于该分类的书签
-    const categoryBookmarks = bookmarks.filter(bookmark => 
-      bookmark.analysis && bookmark.analysis.category === oldCategory
-    );
-    
-    // 如果没有书签使用此分类，直接返回
-    if (categoryBookmarks.length === 0) {
-      return;
+    if (error) {
+      console.error('获取书签失败:', error);
+      throw error;
     }
     
-    // 批量更新每个书签的分类
-    for (const bookmark of categoryBookmarks) {
-      // 准备新的分析数据
-      const analysis = { ...bookmark.analysis, category: newCategory };
-      
-      await supabase
+    if (!data || data.length === 0) {
+      console.log(`没有找到分类为 "${oldCategory}" 的书签`);
+      return; // 没有书签需要更新
+    }
+    
+    console.log(`找到 ${data.length} 个需要更新分类的书签`);
+    
+    // 批量更新这些书签的分类
+    for (const bookmark of data) {
+      const { error: updateError } = await supabase
         .from(BOOKMARKS_TABLE)
-        .update({ analysis })
+        .update({ 
+          category: newCategory,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', bookmark.id)
         .eq('user_id', userId);
+      
+      if (updateError) {
+        console.error(`更新书签 ${bookmark.id} 分类失败:`, updateError);
+        // 继续尝试更新其他书签
+      }
     }
+    
+    console.log(`成功更新了 ${data.length} 个书签的分类`);
   } catch (error) {
-    console.error('Error updating bookmark category:', error);
+    console.error('更新书签分类失败:', error);
     throw error;
   }
 }
