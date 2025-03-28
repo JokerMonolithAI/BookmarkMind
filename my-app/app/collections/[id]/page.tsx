@@ -298,6 +298,7 @@ function CollectionContent() {
                   }}
                   viewMode="grid"
                   onDeleted={fetchCollectionData}
+                  collectionId={collection.id}
                 />
               ))}
             </div>

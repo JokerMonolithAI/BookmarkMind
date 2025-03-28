@@ -97,7 +97,7 @@ export function TagsList({
         title: '标签已删除',
         description: '标签已成功删除',
       });
-      eventService.publish(EVENTS.TAG_DELETED);
+      eventService.publish(EVENTS.TAG_DELETED, { tagId });
     } catch (error) {
       console.error('Error deleting tag:', error);
       toast({

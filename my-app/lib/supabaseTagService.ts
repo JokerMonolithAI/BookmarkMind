@@ -58,6 +58,11 @@ export interface BookmarkTag {
 const TAGS_TABLE = 'tags';
 const BOOKMARK_TAGS_TABLE = 'bookmark_tags';
 
+// 生成唯一ID的函数
+function generateId(prefix: string = ''): string {
+  return `${prefix}${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 9)}`;
+}
+
 /**
  * 获取用户的所有标签
  */
@@ -215,8 +220,8 @@ export async function createTag(
       textColor = '#ffffff';
     }
     
-    // 生成新标签ID
-    const tagId = `tag_${now.getTime()}`;
+    // 使用更健壮的ID生成函数
+    const tagId = generateId('tag_');
     
     // 创建标签数据
     const { data: insertedTag, error: insertError } = await supabase
@@ -364,9 +369,15 @@ export async function deleteTag(userId: string, tagId: string): Promise<void> {
       .select('id')
       .eq('id', tagId)
       .eq('user_id', userId)
-      .single();
+      .maybeSingle(); // 改为 maybeSingle 避免在标签不存在时抛出错误
       
     if (checkError) throw checkError;
+    
+    // 如果标签不存在，直接返回
+    if (!tag) {
+      console.log(`Tag with id ${tagId} not found or not owned by user ${userId}`);
+      return;
+    }
     
     // 删除标签（通过级联删除关系，会自动删除相关的bookmark_tags记录）
     const { error: deleteError } = await supabase
@@ -393,9 +404,15 @@ export async function getTagBookmarks(userId: string, tagId: string): Promise<st
       .select('id')
       .eq('id', tagId)
       .eq('user_id', userId)
-      .single();
+      .maybeSingle(); // 改为 maybeSingle 避免在标签不存在时抛出错误
       
     if (checkError) throw checkError;
+    
+    // 如果标签不存在，返回空数组
+    if (!tag) {
+      console.log(`Tag with id ${tagId} not found or not owned by user ${userId}`);
+      return [];
+    }
     
     // 获取关联的书签
     const { data, error } = await supabase
@@ -424,9 +441,15 @@ export async function addTagToBookmark(userId: string, tagId: string, bookmarkId
       .select('id, count')
       .eq('id', tagId)
       .eq('user_id', userId)
-      .single();
+      .maybeSingle(); // 改为 maybeSingle 避免在标签不存在时抛出错误
       
     if (tagError) throw tagError;
+    
+    // 如果标签不存在，直接返回
+    if (!tag) {
+      console.log(`Tag with id ${tagId} not found or not owned by user ${userId}`);
+      return;
+    }
     
     // 检查关联是否已存在
     const { data: existing, error: checkError } = await supabase
@@ -494,9 +517,15 @@ export async function removeTagFromBookmark(userId: string, tagId: string, bookm
       .select('id, count')
       .eq('id', tagId)
       .eq('user_id', userId)
-      .single();
+      .maybeSingle(); // 改为 maybeSingle 避免在标签不存在时抛出错误
       
     if (tagError) throw tagError;
+    
+    // 如果标签不存在，直接返回
+    if (!tag) {
+      console.log(`Tag with id ${tagId} not found or not owned by user ${userId}`);
+      return;
+    }
     
     // 删除关联
     const { error: deleteError } = await supabase

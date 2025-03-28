@@ -16,6 +16,7 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { Bookmark as BookmarkType, deleteBookmark } from '@/lib/supabaseBookmarkService';
+import { removeBookmarkFromCollection } from '@/lib/supabaseCollectionService';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -50,9 +51,10 @@ interface BookmarkCardProps {
   };
   viewMode?: 'grid' | 'list';
   onDeleted?: () => void;
+  collectionId?: string;
 }
 
-export function BookmarkCard({ bookmark, viewMode = 'grid', onDeleted }: BookmarkCardProps) {
+export function BookmarkCard({ bookmark, viewMode = 'grid', onDeleted, collectionId }: BookmarkCardProps) {
   const router = useRouter();
   const { user } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -87,13 +89,26 @@ export function BookmarkCard({ bookmark, viewMode = 'grid', onDeleted }: Bookmar
     
     try {
       setIsDeleting(true);
-      await deleteBookmark(user.id, bookmark.id);
       
-      // 显示成功提示
-      toast({
-        title: "书签已删除",
-        description: "书签已成功删除",
-      });
+      // 如果提供了收藏集ID，只从收藏集中移除书签
+      if (collectionId) {
+        await removeBookmarkFromCollection(user.id, collectionId, bookmark.id);
+        
+        // 显示成功提示
+        toast({
+          title: "书签已移除",
+          description: "书签已从收藏集中移除",
+        });
+      } else {
+        // 否则删除书签数据
+        await deleteBookmark(user.id, bookmark.id);
+        
+        // 显示成功提示
+        toast({
+          title: "书签已删除",
+          description: "书签已成功删除",
+        });
+      }
       
       // 发布书签删除事件，通知其他组件刷新
       eventService.publish(EVENTS.BOOKMARK_DELETED, { bookmarkId: bookmark.id });
@@ -108,7 +123,7 @@ export function BookmarkCard({ bookmark, viewMode = 'grid', onDeleted }: Bookmar
     } catch (error) {
       console.error('Error deleting bookmark:', error);
       toast({
-        title: "删除书签失败",
+        title: collectionId ? "移除书签失败" : "删除书签失败",
         description: "请稍后再试",
         variant: "destructive",
       });
@@ -248,9 +263,9 @@ export function BookmarkCard({ bookmark, viewMode = 'grid', onDeleted }: Bookmar
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>确认删除</AlertDialogTitle>
+              <AlertDialogTitle>确认{collectionId ? '移除' : '删除'}</AlertDialogTitle>
               <AlertDialogDescription>
-                您确定要删除书签 "{bookmark.title}" 吗？此操作无法撤销。
+                您确定要{collectionId ? '从收藏集中移除' : '删除'}书签 "{bookmark.title}" 吗？{!collectionId && '此操作无法撤销。'}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -263,10 +278,10 @@ export function BookmarkCard({ bookmark, viewMode = 'grid', onDeleted }: Bookmar
                 {isDeleting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    删除中...
+                    {collectionId ? '移除中...' : '删除中...'}
                   </>
                 ) : (
-                  '删除'
+                  collectionId ? '移除' : '删除'
                 )}
               </AlertDialogAction>
             </AlertDialogFooter>
@@ -357,9 +372,9 @@ export function BookmarkCard({ bookmark, viewMode = 'grid', onDeleted }: Bookmar
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>确认删除</AlertDialogTitle>
+            <AlertDialogTitle>确认{collectionId ? '移除' : '删除'}</AlertDialogTitle>
             <AlertDialogDescription>
-              您确定要删除书签 "{bookmark.title}" 吗？此操作无法撤销。
+              您确定要{collectionId ? '从收藏集中移除' : '删除'}书签 "{bookmark.title}" 吗？{!collectionId && '此操作无法撤销。'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -372,10 +387,10 @@ export function BookmarkCard({ bookmark, viewMode = 'grid', onDeleted }: Bookmar
               {isDeleting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  删除中...
+                  {collectionId ? '移除中...' : '删除中...'}
                 </>
               ) : (
-                '删除'
+                collectionId ? '移除' : '删除'
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

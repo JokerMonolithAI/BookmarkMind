@@ -66,7 +66,7 @@ export function EditTagDialog({ open, onOpenChange, tag, onUpdated }: EditTagDia
     try {
       setIsLoading(true);
       
-      await updateTag(user.id, tag.id, {
+      const updatedTag = await updateTag(user.id, tag.id, {
         name,
         color,
         bgColor: customColor
@@ -78,9 +78,14 @@ export function EditTagDialog({ open, onOpenChange, tag, onUpdated }: EditTagDia
       });
       
       // 发布标签更新事件
-      eventService.publish(EVENTS.COLLECTION_UPDATED);
+      eventService.publish(EVENTS.TAG_UPDATED, { tagId: tag.id });
       
-      onUpdated();
+      // 通知父组件更新完成
+      if (onUpdated) {
+        onUpdated();
+      }
+      
+      // 关闭对话框
       onOpenChange(false);
     } catch (error) {
       console.error('Error updating tag:', error);

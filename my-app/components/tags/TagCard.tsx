@@ -71,6 +71,12 @@ export function TagCard({ tag, onDeleted }: TagCardProps) {
     }
   };
 
+  // 处理标签更新
+  const handleTagUpdated = () => {
+    // 刷新标签数据但不触发删除
+    router.refresh();
+  };
+
   return (
     <>
       <div 
@@ -146,14 +152,12 @@ export function TagCard({ tag, onDeleted }: TagCardProps) {
       </div>
 
       {/* 编辑标签对话框 */}
-      {isEditDialogOpen && (
-        <EditTagDialog
-          open={isEditDialogOpen}
-          onOpenChange={setIsEditDialogOpen}
-          tag={tag}
-          onUpdated={onDeleted}
-        />
-      )}
+      <EditTagDialog
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        tag={tag}
+        onUpdated={handleTagUpdated}
+      />
 
       {/* 删除确认对话框 */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
