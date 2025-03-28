@@ -501,4 +501,47 @@ export async function addBookmarksToCollection(
     console.error('Error adding bookmarks to collection:', error);
     throw error;
   }
+}
+
+/**
+ * 根据ID列表获取收藏集信息
+ */
+export async function getCollectionsByIds(userId: string, collectionIds: string[]): Promise<Collection[]> {
+  try {
+    if (!userId || !collectionIds.length) {
+      return [];
+    }
+    
+    const { data, error } = await supabase
+      .from(COLLECTIONS_TABLE)
+      .select('*')
+      .eq('user_id', userId)
+      .in('id', collectionIds);
+      
+    if (error) {
+      console.error('Error fetching collections by IDs:', error);
+      throw error;
+    }
+    
+    if (!data || data.length === 0) {
+      return [];
+    }
+    
+    // 将数据库结果转换为应用格式
+    const collections: Collection[] = data.map(item => ({
+      id: item.id,
+      name: item.name,
+      description: item.description || '',
+      userId: item.user_id,
+      createdAt: new Date(item.created_at).getTime(),
+      updatedAt: new Date(item.updated_at).getTime(),
+      bookmarkCount: item.bookmark_count || 0,
+      isPublic: item.is_public || false
+    }));
+    
+    return collections;
+  } catch (error) {
+    console.error('Error fetching collections by IDs:', error);
+    return [];
+  }
 } 

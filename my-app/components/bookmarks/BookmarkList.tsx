@@ -9,7 +9,7 @@ import { toast } from '@/components/ui/use-toast';
 import { useView as useDashboardView } from '@/components/dashboard/ViewToggle';
 import { useView as useBookmarksView } from '@/components/bookmarks/ViewToggle';
 import { Tag, getBookmarkTags } from '@/lib/supabaseTagService';
-import { getBookmarkCollections } from '@/lib/supabaseCollectionService';
+import { getBookmarkCollections, getCollectionsByIds } from '@/lib/supabaseCollectionService';
 import { getUserBookmarks, deleteBookmark, updateBookmark, Bookmark } from '@/lib/supabaseBookmarkService';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -278,7 +278,7 @@ export default function BookmarkList({
     setCurrentPage(page);
   };
 
-  // 获取书签的标签和收藏集
+  // 获取书签的标签和收藏集信息
   const fetchBookmarkMetadata = useCallback(async (bookmarkId: string) => {
     if (!user || loadingMetadata[bookmarkId]) return;
     
@@ -295,10 +295,12 @@ export default function BookmarkList({
       const collections: {id: string, name: string}[] = [];
       
       if (collectionIds.length > 0) {
-        // 直接构建收藏集对象数组
-        collections.push(...collectionIds.map(id => ({
-          id,
-          name: id // 临时使用 ID 作为名称，后续可改进
+        // 使用 getCollectionsByIds 获取收藏集详细信息
+        const collectionsData = await getCollectionsByIds(user.id, collectionIds);
+        
+        collections.push(...collectionsData.map(collection => ({
+          id: collection.id,
+          name: collection.name
         })));
       }
       
