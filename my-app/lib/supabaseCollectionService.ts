@@ -38,6 +38,11 @@ const COLLECTIONS_TABLE = 'collections';
 const COLLECTION_BOOKMARKS_TABLE = 'collection_bookmarks';
 const BOOKMARKS_TABLE = 'bookmarks';
 
+// 生成唯一ID的函数
+function generateId(prefix: string = ''): string {
+  return `${prefix}${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 9)}`;
+}
+
 /**
  * 获取用户的所有收藏集
  */
@@ -140,11 +145,13 @@ export async function getCollection(userId: string, collectionId: string): Promi
 export async function createCollection(userId: string, data: { name: string; description?: string }): Promise<Collection> {
   try {
     const timestamp = new Date().toISOString();
+    const collectionId = generateId('col_'); // 生成唯一ID，以col_为前缀
     
     // 创建新收藏集记录
     const { data: insertedData, error } = await supabase
       .from(COLLECTIONS_TABLE)
       .insert({
+        id: collectionId, // 提供ID字段的值
         name: data.name,
         description: data.description || '',
         user_id: userId,
