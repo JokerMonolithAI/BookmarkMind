@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { Footer } from '@/components/ui/footer';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight, Brain, Check, Clock, FileText, Folder, MoveRight, Share2, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Brain, Check, Clock, FileText, Folder, Heart, HeartHandshake, MoveRight, Share2, ShieldCheck } from 'lucide-react';
 
 export default function HomePage() {
   const router = useRouter();
@@ -80,7 +80,16 @@ export default function HomePage() {
               <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-cyan-500">BookmarkMind</span>
             </div>
             <div className="flex items-center gap-4">
-              <Link href="/login" className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">登录</Link>
+              <Link 
+                href="https://afdian.com/a/bookmarkmind" 
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-gray-600 dark:text-gray-300 hover:text-pink-500 dark:hover:text-pink-400 transition-colors"
+              >
+                <Heart className="h-4 w-4 text-pink-500" fill="currentColor" />
+                <span>爱发电</span>
+              </Link>
+              <Link href="/login" className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">登录</Link>
               <Link href="/signup" className="px-4 py-2 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors">注册</Link>
             </div>
           </nav>
@@ -252,12 +261,22 @@ export default function HomePage() {
               <p className="text-xl text-gray-600 dark:text-gray-400 mb-8">
                 加入BookmarkMind，让AI助您整理知识，提升认知
               </p>
-              <button 
-                onClick={handleGetStarted}
-                className="px-8 py-3 rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 text-white font-medium text-lg inline-flex items-center gap-2 hover:shadow-lg transition-all"
-              >
-                免费注册 <MoveRight size={20} />
-              </button>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <button 
+                  onClick={handleGetStarted}
+                  className="px-8 py-3 rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 text-white font-medium text-lg inline-flex items-center gap-2 hover:shadow-lg transition-all"
+                >
+                  免费注册 <MoveRight size={20} />
+                </button>
+                <Link 
+                  href="https://afdian.com/a/bookmarkmind"
+                  target="_blank"
+                  rel="noopener noreferrer" 
+                  className="px-8 py-3 rounded-full border border-pink-300 dark:border-pink-700 text-pink-600 dark:text-pink-400 font-medium hover:bg-pink-50 dark:hover:bg-pink-900/20 transition-all inline-flex items-center gap-2"
+                >
+                  支持我们 <Heart size={18} fill="currentColor" />
+                </Link>
+              </div>
             </div>
           </section>
         </main>
