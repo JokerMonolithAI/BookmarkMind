@@ -59,7 +59,7 @@ export const metadata: Metadata = {
     canonical: 'https://www.bookmarkmind.top',
   },
   verification: {
-    google: 'google-site-verification-code',
+    google: '4f07879ff012377c',
     other: {
       baidu: 'baidu-site-verification-code'
     }
